@@ -1,9 +1,8 @@
-[README.md](https://github.com/user-attachments/files/31880604/README.md)
 # Streakk
 
-A minimal, privacy-first habit and task tracker for Android — built entirely with Kotlin and Jetpack Compose.
+A minimal, privacy-first habit tracker for Android — built entirely with Kotlin and Jetpack Compose.
 
-Streakk helps you build consistency around daily habits and to-dos without ever touching the internet, showing an ad, or asking for an account.
+Streakk helps you build consistency around daily habits without ever touching the internet, showing an ad, or asking for an account.
 
 ## Table of Contents
 
@@ -33,11 +32,6 @@ Streakk helps you build consistency around daily habits and to-dos without ever 
 - Mark a habit **Done**, **Skipped**, or **Undo** it back to active for any given day
 - Streak counter that reflects real completion history
 
-### To-Dos
-- Quick-add to-dos with subtasks
-- Optional reminders with an editable time (tap to change, tap the cross to clear)
-- Reminders automatically cancel once a task is marked complete
-
 ### Calendar & Navigation
 - Horizontal week-strip calendar (swipe between weeks, jump back to Today)
 - Today / Tomorrow / Yesterday get contextual labels; every other day shows its date and weekday
@@ -46,7 +40,6 @@ Streakk helps you build consistency around daily habits and to-dos without ever 
 ### Reminders
 - Local notifications scheduled with `AlarmManager` — no server, no push service
 - Habit reminders repeat only on the days you've chosen, and automatically stop once a habit's end condition is reached
-- To-do reminders fire once and clean up after themselves
 
 ### PDFs
 - Built-in PDF viewer tab with folders and search
@@ -123,7 +116,7 @@ The debug APK will be generated under `app/build/outputs/apk/debug/`.
 
 ## Privacy
 
-Streakk requests **zero runtime permissions related to networking** and has no internet permission declared in its manifest. Every habit, to-do, and setting lives only in local `SharedPreferences` on your device. There is nothing to sync, nothing to leak, and nothing to sell.
+Streakk requests **zero runtime permissions related to networking** and has no internet permission declared in its manifest. Every habit and setting lives only in local `SharedPreferences` on your device. There is nothing to sync, nothing to leak, and nothing to sell.
 
 ---
 
