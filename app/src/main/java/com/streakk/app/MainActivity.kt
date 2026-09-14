@@ -2046,7 +2046,7 @@ fun PermissionsScreen(onBack: () -> Unit, bottomContentPadding: Dp = 0.dp) {
                     if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
                         val intent = Intent(Settings.ACTION_REQUEST_SCHEDULE_EXACT_ALARM)
                             .apply { data = Uri.parse("package:${context.packageName}") }
-                        safeLaunchPermission(context) { settingsResultLauncher.launch(intent) }
+                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                        safeLaunchPermission(context) { settingsResultLauncher.launch(intent) }
                     }
                 }
             )
@@ -2257,7 +2257,7 @@ fun PrivacyPolicyScreen(onBack: () -> Unit, bottomContentPadding: Dp = 0.dp) {
 
         sectionTitle("8. Contact Us")
         sectionBody(
-            "If you have any questions about this Privacy Policy, reach out at idabvx@protonmail.com."
+            "If you have any questions about this Privacy Policy, reach out at idabhinavx@protonmail\u200B.com."
         )
 
         Spacer(Modifier.height(20.dp))
