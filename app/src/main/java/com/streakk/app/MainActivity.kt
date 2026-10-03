@@ -11,9 +11,6 @@ import androidx.lifecycle.Lifecycle
 import androidx.lifecycle.lifecycleScope
 import androidx.lifecycle.LifecycleEventObserver
 import androidx.activity.compose.BackHandler
-import androidx.activity.compose.PredictiveBackHandler
-import kotlinx.coroutines.flow.collectLatest
-import kotlinx.coroutines.CancellationException
 import androidx.fragment.app.FragmentActivity
 import androidx.biometric.BiometricManager
 import androidx.biometric.BiometricPrompt
@@ -22,25 +19,19 @@ import androidx.compose.foundation.clickable
 import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyRow
-import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
-import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.border
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Add
-import androidx.compose.material.icons.filled.List
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.filled.Alarm
-import androidx.compose.material.icons.filled.RunCircle
-import androidx.compose.material.icons.filled.CalendarToday
 import androidx.compose.material.icons.filled.AccessTime
 import androidx.compose.material.icons.filled.Check
 import androidx.compose.material.icons.filled.CheckCircle
 import androidx.compose.material.icons.filled.Description
-import androidx.compose.material.icons.filled.AccountCircle
 import androidx.compose.material.icons.filled.ChevronRight
 import androidx.compose.material.icons.filled.ChevronLeft
 import androidx.compose.material.icons.filled.Edit
@@ -51,36 +42,9 @@ import androidx.compose.material.icons.filled.Notifications
 import androidx.compose.material.icons.filled.Lock
 import androidx.compose.material.icons.filled.Shield
 import androidx.compose.material.icons.filled.Fingerprint
-import androidx.compose.material.icons.filled.Person
 import androidx.compose.material.icons.filled.Settings
 import androidx.compose.material.icons.filled.EmojiEmotions
-import androidx.compose.material.icons.filled.WaterDrop
-import androidx.compose.material.icons.automirrored.filled.DirectionsRun
-import androidx.compose.material.icons.automirrored.filled.MenuBook
-import androidx.compose.material.icons.filled.SelfImprovement
-import androidx.compose.material.icons.filled.Restaurant
-import androidx.compose.material.icons.filled.Bedtime
-import androidx.compose.material.icons.filled.FitnessCenter
-import androidx.compose.material.icons.filled.Accessibility
-import androidx.compose.material.icons.filled.MusicNote
-import androidx.compose.material.icons.filled.School
-import androidx.compose.material.icons.filled.Work
-import androidx.compose.material.icons.filled.Code
-import androidx.compose.material.icons.filled.Palette
-import androidx.compose.material.icons.filled.ShoppingCart
-import androidx.compose.material.icons.filled.CleaningServices
-import androidx.compose.material.icons.filled.Pets
-import androidx.compose.material.icons.filled.PhoneAndroid
-import androidx.compose.material.icons.filled.EditNote
-import androidx.compose.material.icons.filled.AttachMoney
-import androidx.compose.material.icons.filled.LocalFlorist
-import androidx.compose.material.icons.automirrored.filled.DirectionsBike
-import androidx.compose.material.icons.filled.Pool
-import androidx.compose.material.icons.filled.Movie
-import androidx.compose.material.icons.filled.SportsEsports
-import androidx.compose.material.icons.filled.Flight
 import androidx.compose.material.icons.filled.Apps
-import androidx.compose.material.icons.filled.WbSunny
 import androidx.compose.material.icons.filled.WbTwilight
 import androidx.compose.material.icons.filled.LightMode
 import androidx.compose.material.icons.filled.NightsStay
@@ -98,19 +62,12 @@ import androidx.compose.ui.draw.shadow
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.font.Font
-import androidx.compose.ui.text.input.TextFieldValue
-import androidx.compose.ui.text.TextRange
 import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.style.TextDecoration
-import androidx.compose.ui.text.font.FontStyle
-import androidx.compose.animation.Crossfade
 import androidx.compose.animation.AnimatedVisibility
-import androidx.compose.animation.core.MutableTransitionState
 import androidx.compose.animation.core.tween
 import androidx.compose.animation.core.FastOutSlowInEasing
 import androidx.compose.animation.core.FastOutLinearInEasing
-import androidx.compose.ui.draw.drawBehind
-import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.animation.animateColorAsState
 import kotlin.random.Random
@@ -129,6 +86,7 @@ import androidx.compose.animation.ExperimentalAnimationApi
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.platform.LocalConfiguration
+import androidx.compose.ui.platform.LocalWindowInfo
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.sp
 import androidx.compose.ui.window.Dialog
@@ -137,9 +95,6 @@ import androidx.compose.foundation.pager.HorizontalPager
 import androidx.compose.foundation.pager.rememberPagerState
 import androidx.compose.foundation.gestures.detectHorizontalDragGestures
 import androidx.compose.ui.input.pointer.pointerInput
-import androidx.compose.ui.unit.IntOffset
-import kotlin.math.abs
-import kotlin.math.roundToInt
 import kotlin.math.sqrt
 import kotlin.math.cos
 import kotlin.math.sin
@@ -170,35 +125,27 @@ import java.text.SimpleDateFormat
 import java.util.Date
 import android.content.Context
 import androidx.compose.ui.platform.LocalContext
-import androidx.compose.ui.platform.LocalLayoutDirection
 import org.json.JSONArray
 import org.json.JSONObject
 import androidx.compose.runtime.snapshots.SnapshotStateMap
 import androidx.compose.runtime.snapshots.SnapshotStateList
 import androidx.compose.runtime.saveable.rememberSaveable
-import androidx.compose.runtime.saveable.rememberSaveableStateHolder
 import androidx.compose.foundation.combinedClickable
-import androidx.compose.foundation.layout.imePadding
-import androidx.compose.foundation.layout.ExperimentalLayoutApi
 import androidx.compose.ui.focus.FocusRequester
 import androidx.compose.ui.focus.focusRequester
 import androidx.compose.ui.window.DialogProperties
 import androidx.compose.ui.text.style.TextOverflow
-import androidx.compose.ui.platform.LocalView
-import androidx.compose.ui.platform.LocalSoftwareKeyboardController
-import androidx.compose.ui.platform.LocalFocusManager
-import androidx.compose.ui.window.DialogWindowProvider
-import android.view.WindowManager
 import androidx.core.view.WindowCompat
 import android.Manifest
 import android.content.ActivityNotFoundException
 import android.util.Log
 import android.app.Activity
 import androidx.core.app.ActivityCompat
-import androidx.compose.foundation.text.selection.SelectionContainer
 import androidx.compose.foundation.text.BasicTextField
 import androidx.compose.ui.graphics.SolidColor
 import androidx.compose.ui.text.input.VisualTransformation
+import androidx.compose.ui.text.input.TextFieldValue
+import androidx.compose.ui.text.TextRange
 import android.content.ContentUris
 import android.content.Intent
 import android.content.pm.PackageManager
@@ -213,12 +160,11 @@ import android.app.KeyguardManager
 import android.media.Ringtone
 import android.media.RingtoneManager
 import android.os.Vibrator
+import android.os.VibratorManager
 import android.os.VibrationEffect
 import android.app.NotificationChannel
 import android.app.NotificationManager
 import android.app.PendingIntent
-import android.media.AudioAttributes
-import android.media.SoundPool
 import android.content.BroadcastReceiver
 import android.content.ComponentName
 import android.content.IntentFilter
@@ -227,10 +173,7 @@ import androidx.core.app.NotificationManagerCompat
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.lazy.LazyColumn
-import androidx.compose.foundation.lazy.rememberLazyListState
-import androidx.compose.foundation.gestures.snapping.rememberSnapFlingBehavior
-import androidx.compose.foundation.gestures.snapping.SnapLayoutInfoProvider
-import androidx.compose.foundation.gestures.snapping.SnapPosition
+import androidx.compose.foundation.lazy.items
 import androidx.core.content.ContextCompat
 import androidx.core.graphics.drawable.toBitmap
 import kotlinx.coroutines.Dispatchers
@@ -254,15 +197,13 @@ import androidx.compose.material.icons.filled.Share
 import androidx.compose.material.icons.filled.Print
 import androidx.compose.material.icons.filled.DriveFileRenameOutline
 import androidx.compose.material.icons.automirrored.filled.DriveFileMove
-import androidx.compose.material.icons.filled.CheckBox
-import androidx.compose.material.icons.filled.CheckBoxOutlineBlank
-import androidx.compose.material.icons.filled.Sync
 import androidx.compose.material.icons.filled.Star
 import androidx.compose.material.icons.filled.Close
 import androidx.compose.material.icons.filled.Search
 import androidx.compose.material.icons.filled.Info
 import androidx.compose.ui.res.painterResource
 import java.io.File
+import java.time.temporal.ChronoUnit
 
 val DarkBg = Color(0xFF121218)
 val CardBg = Color(0xFF23242C)
@@ -416,66 +357,6 @@ fun PermissionsRequiredDialog(
     }
 }
 
-@Composable
-private fun PermissionRequestRow(
-    icon: androidx.compose.ui.graphics.vector.ImageVector,
-    title: String,
-    description: String,
-    onAllow: () -> Unit
-) {
-    Column {
-        Row(verticalAlignment = Alignment.CenterVertically) {
-            Icon(icon, contentDescription = null, tint = BlueAccent, modifier = Modifier.size(20.dp))
-            Spacer(Modifier.width(10.dp))
-            Text(title, color = Color.White, fontWeight = FontWeight.Bold, fontSize = 14.sp)
-        }
-        Spacer(Modifier.height(6.dp))
-        Text(description, color = TextGray, fontSize = 13.sp)
-        Spacer(Modifier.height(12.dp))
-        Box(
-            modifier = Modifier
-                .fillMaxWidth()
-                .height(48.dp)
-                .clip(RoundedCornerShape(12.dp))
-                .background(BlueAccent)
-                .clickable { onAllow() },
-            contentAlignment = Alignment.Center
-        ) {
-            Text("ALLOW", color = Color.White, fontWeight = FontWeight.Bold)
-        }
-    }
-}
-
-val HabitIconOptions: List<Pair<String, androidx.compose.ui.graphics.vector.ImageVector>> = listOf(
-    "smile" to Icons.Filled.EmojiEmotions,
-    "water" to Icons.Filled.WaterDrop,
-    "run" to Icons.AutoMirrored.Filled.DirectionsRun,
-    "book" to Icons.AutoMirrored.Filled.MenuBook,
-    "meditate" to Icons.Filled.SelfImprovement,
-    "food" to Icons.Filled.Restaurant,
-    "sleep" to Icons.Filled.Bedtime,
-    "workout" to Icons.Filled.FitnessCenter,
-    "yoga" to Icons.Filled.Accessibility,
-    "music" to Icons.Filled.MusicNote,
-    "study" to Icons.Filled.School,
-    "work" to Icons.Filled.Work,
-    "code" to Icons.Filled.Code,
-    "art" to Icons.Filled.Palette,
-    "shopping" to Icons.Filled.ShoppingCart,
-    "cleaning" to Icons.Filled.CleaningServices,
-    "pet" to Icons.Filled.Pets,
-    "phone" to Icons.Filled.PhoneAndroid,
-    "journal" to Icons.Filled.EditNote,
-    "money" to Icons.Filled.AttachMoney,
-    "plant" to Icons.Filled.LocalFlorist,
-    "coffee" to Icons.Filled.LocalCafe,
-    "bike" to Icons.AutoMirrored.Filled.DirectionsBike,
-    "swim" to Icons.Filled.Pool,
-    "movie" to Icons.Filled.Movie,
-    "game" to Icons.Filled.SportsEsports,
-    "travel" to Icons.Filled.Flight,
-    "star" to Icons.Filled.Star
-)
 val HabitIconMap: Map<String, androidx.compose.ui.graphics.vector.ImageVector> = HabitIconOptions.toMap()
 fun iconForKey(key: String): androidx.compose.ui.graphics.vector.ImageVector = HabitIconMap[key] ?: Icons.Filled.EmojiEmotions
 
@@ -588,44 +469,6 @@ object HabitStorage {
             result[key] = HabitStatus.valueOf(obj.getString("status"))
         }
         return result
-    }
-}
-
-object TodoStorage {
-    private const val PREFS_NAME = "todo_prefs"
-    private const val KEY_TODOS = "todos_json"
-
-    fun save(context: Context, todos: List<HomeTodoItem>) {
-        val array = JSONArray()
-        todos.forEach { todo ->
-            val obj = JSONObject()
-            obj.put("id", todo.id)
-            obj.put("text", todo.text)
-            obj.put("date", todo.date.toString())
-            obj.put("reminderTime", todo.reminderTime?.toString() ?: JSONObject.NULL)
-            obj.put("completed", todo.completed)
-            array.put(obj)
-        }
-        context.getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE)
-            .edit()
-            .putString(KEY_TODOS, array.toString())
-            .apply()
-    }
-
-    fun load(context: Context): List<HomeTodoItem> {
-        val json = context.getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE)
-            .getString(KEY_TODOS, null) ?: return emptyList()
-        val array = JSONArray(json)
-        return (0 until array.length()).map { i ->
-            val obj = array.getJSONObject(i)
-            HomeTodoItem(
-                id = obj.getLong("id"),
-                text = obj.getString("text"),
-                date = LocalDate.parse(obj.getString("date")),
-                reminderTime = if (obj.isNull("reminderTime")) null else LocalTime.parse(obj.getString("reminderTime")),
-                completed = obj.getBoolean("completed")
-            )
-        }
     }
 }
 
@@ -802,107 +645,6 @@ object HabitReminderScheduler {
     }
 }
 
-object TodoReminderScheduler {
-    private const val CHANNEL_ID = "todo_reminders"
-
-    fun createNotificationChannel(context: Context) {
-        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
-            val channel = NotificationChannel(
-                CHANNEL_ID,
-                "Task reminders",
-                NotificationManager.IMPORTANCE_HIGH
-            ).apply {
-                description = "Reminders for your to-do tasks"
-            }
-            val manager = context.getSystemService(Context.NOTIFICATION_SERVICE) as NotificationManager
-            manager.createNotificationChannel(channel)
-        }
-    }
-
-    private fun alarmIntent(context: Context, todoId: Long): Intent =
-        Intent(context, HabitReminderReceiver::class.java).apply {
-            action = "todo_reminder_$todoId"
-        }
-
-    fun schedule(context: Context, todo: HomeTodoItem) {
-        cancel(context, todo.id)
-        val time = todo.reminderTime ?: return
-        if (todo.completed) return
-        val triggerDateTime = todo.date.atTime(time)
-        if (!triggerDateTime.isAfter(LocalDateTime.now())) return
-        val triggerAt = triggerDateTime.atZone(ZoneId.systemDefault()).toInstant().toEpochMilli()
-
-        val intent = alarmIntent(context, todo.id).apply {
-            putExtra("isTodo", true)
-            putExtra("todoId", todo.id)
-            putExtra("todoText", todo.text)
-        }
-        val pendingIntent = PendingIntent.getBroadcast(
-            context,
-            todo.id.toInt(),
-            intent,
-            PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE
-        )
-        val alarmManager = context.getSystemService(Context.ALARM_SERVICE) as AlarmManager
-        try {
-            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S && !alarmManager.canScheduleExactAlarms()) {
-                alarmManager.setAndAllowWhileIdle(AlarmManager.RTC_WAKEUP, triggerAt, pendingIntent)
-            } else {
-                alarmManager.setExactAndAllowWhileIdle(AlarmManager.RTC_WAKEUP, triggerAt, pendingIntent)
-            }
-        } catch (e: SecurityException) {
-            alarmManager.setAndAllowWhileIdle(AlarmManager.RTC_WAKEUP, triggerAt, pendingIntent)
-        }
-    }
-
-    fun cancel(context: Context, todoId: Long) {
-        val pendingIntent = PendingIntent.getBroadcast(
-            context,
-            todoId.toInt(),
-            alarmIntent(context, todoId),
-            PendingIntent.FLAG_NO_CREATE or PendingIntent.FLAG_IMMUTABLE
-        ) ?: return
-        val alarmManager = context.getSystemService(Context.ALARM_SERVICE) as AlarmManager
-        alarmManager.cancel(pendingIntent)
-        pendingIntent.cancel()
-    }
-
-    fun rescheduleAll(context: Context) {
-        TodoStorage.load(context).forEach { schedule(context, it) }
-    }
-
-    fun showNotification(context: Context, todoId: Long, text: String) {
-        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU &&
-            context.checkSelfPermission(Manifest.permission.POST_NOTIFICATIONS) != PackageManager.PERMISSION_GRANTED
-        ) {
-            return
-        }
-        val openIntent = Intent(context, MainActivity::class.java).apply {
-            flags = Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_CLEAR_TOP
-        }
-        val contentPendingIntent = PendingIntent.getActivity(
-            context,
-            todoId.toInt(),
-            openIntent,
-            PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE
-        )
-        val largeIcon = ContextCompat.getDrawable(context, R.mipmap.ic_launcher)?.toBitmap()
-        val notification = NotificationCompat.Builder(context, CHANNEL_ID)
-            .setSmallIcon(R.drawable.ic_launcher_foreground)
-            .setColor(android.graphics.Color.parseColor("#3B7BF5"))
-            .setLargeIcon(largeIcon)
-            .setContentTitle("Task reminder")
-            .setContentText(text)
-            .setStyle(NotificationCompat.BigTextStyle().bigText(text))
-            .setPriority(NotificationCompat.PRIORITY_HIGH)
-            .setCategory(NotificationCompat.CATEGORY_REMINDER)
-            .setAutoCancel(true)
-            .setContentIntent(contentPendingIntent)
-            .build()
-        NotificationManagerCompat.from(context).notify(todoId.toInt(), notification)
-    }
-}
-
 class HabitReminderReceiver : BroadcastReceiver() {
     override fun onReceive(context: Context, intent: Intent) {
         if (intent.getBooleanExtra("isTodo", false)) {
@@ -1004,7 +746,13 @@ class AlarmRingActivity : ComponentActivity() {
         ringtone?.isLooping = true
         ringtone?.play()
 
-        vibrator = getSystemService(Context.VIBRATOR_SERVICE) as? Vibrator
+        vibrator = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
+            val vibratorManager = getSystemService(Context.VIBRATOR_MANAGER_SERVICE) as? VibratorManager
+            vibratorManager?.defaultVibrator
+        } else {
+            @Suppress("DEPRECATION")
+            getSystemService(Context.VIBRATOR_SERVICE) as? Vibrator
+        }
         val pattern = longArrayOf(0, 500, 500)
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
             vibrator?.vibrate(VibrationEffect.createWaveform(pattern, 0))
@@ -1068,171 +816,7 @@ class BootReceiver : BroadcastReceiver() {
         }
     }
 }
-object CompletionSoundPlayer {
-    private var soundPool: SoundPool? = null
-    private var soundId: Int = 0
-    private var loaded = false
 
-    fun init(context: Context) {
-        if (soundPool != null) return
-        val attrs = AudioAttributes.Builder()
-            .setUsage(AudioAttributes.USAGE_ASSISTANCE_SONIFICATION)
-            .setContentType(AudioAttributes.CONTENT_TYPE_SONIFICATION)
-            .build()
-        soundPool = SoundPool.Builder().setMaxStreams(1).setAudioAttributes(attrs).build()
-        soundId = soundPool!!.load(context, R.raw.task_complete, 1)
-        soundPool!!.setOnLoadCompleteListener { _, _, status -> loaded = status == 0 }
-    }
-
-    fun play() {
-        if (loaded) soundPool?.play(soundId, 1f, 1f, 1, 0, 1f)
-    }
-
-    fun release() {
-        soundPool?.release()
-        soundPool = null
-        loaded = false
-    }
-}
-object SettingsStorage {
-    private const val PREFS_NAME = "habit_prefs"
-    private const val KEY_FIRST_DAY = "first_day_of_week"
-    private const val KEY_SHOW_STREAK = "show_streak_count"
-
-    fun loadFirstDayOfWeek(context: Context): DayOfWeek {
-        val name = context.getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE)
-            .getString(KEY_FIRST_DAY, DayOfWeek.MONDAY.name)
-        return DayOfWeek.valueOf(name ?: DayOfWeek.MONDAY.name)
-    }
-
-    fun saveFirstDayOfWeek(context: Context, day: DayOfWeek) {
-        context.getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE)
-            .edit()
-            .putString(KEY_FIRST_DAY, day.name)
-            .apply()
-    }
-
-    fun loadShowStreakCount(context: Context): Boolean {
-        return context.getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE)
-            .getBoolean(KEY_SHOW_STREAK, true)
-    }
-
-    fun saveShowStreakCount(context: Context, value: Boolean) {
-        context.getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE)
-            .edit()
-            .putBoolean(KEY_SHOW_STREAK, value)
-            .apply()
-    }
-
-    private const val KEY_SOUND_ON_COMPLETE = "sound_on_complete"
-
-    fun loadSoundOnComplete(context: Context): Boolean {
-        return context.getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE)
-            .getBoolean(KEY_SOUND_ON_COMPLETE, true)
-    }
-
-    fun saveSoundOnComplete(context: Context, value: Boolean) {
-        context.getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE)
-            .edit()
-            .putBoolean(KEY_SOUND_ON_COMPLETE, value)
-            .apply()
-    }
-
-    private const val KEY_SORT_ORDER = "pdf_default_sort"
-    private const val KEY_AUTO_SCAN = "pdf_auto_scan"
-    private const val KEY_PDF_APP = "pdf_preferred_app"
-    private const val KEY_FILE_SIZE_UNIT = "pdf_file_size_unit"
-
-    fun loadDefaultSortOrder(context: Context): PdfSortOption {
-        val name = context.getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE)
-            .getString(KEY_SORT_ORDER, PdfSortOption.NEWEST.name)
-        return try { PdfSortOption.valueOf(name ?: PdfSortOption.NEWEST.name) } catch (e: Exception) { PdfSortOption.NEWEST }
-    }
-
-    fun saveDefaultSortOrder(context: Context, option: PdfSortOption) {
-        context.getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE)
-            .edit()
-            .putString(KEY_SORT_ORDER, option.name)
-            .apply()
-    }
-
-    fun loadAutoScan(context: Context): Boolean {
-        return context.getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE)
-            .getBoolean(KEY_AUTO_SCAN, true)
-    }
-
-    fun saveAutoScan(context: Context, value: Boolean) {
-        context.getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE)
-            .edit()
-            .putBoolean(KEY_AUTO_SCAN, value)
-            .apply()
-    }
-
-    fun loadPreferredPdfApp(context: Context): String? {
-        return context.getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE)
-            .getString(KEY_PDF_APP, null)
-    }
-
-    fun savePreferredPdfApp(context: Context, packageName: String?) {
-        context.getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE)
-            .edit()
-            .putString(KEY_PDF_APP, packageName)
-            .apply()
-    }
-
-    fun loadFileSizeUnit(context: Context): FileSizeUnit {
-        val name = context.getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE)
-            .getString(KEY_FILE_SIZE_UNIT, FileSizeUnit.AUTO.name)
-        return try { FileSizeUnit.valueOf(name ?: FileSizeUnit.AUTO.name) } catch (e: Exception) { FileSizeUnit.AUTO }
-    }
-
-    fun saveFileSizeUnit(context: Context, unit: FileSizeUnit) {
-        context.getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE)
-            .edit()
-            .putString(KEY_FILE_SIZE_UNIT, unit.name)
-            .apply()
-    }
-
-    private const val KEY_APP_LOCK_ENABLED = "app_lock_enabled"
-    private const val KEY_AUTO_LOCK_TIMEOUT = "auto_lock_timeout"
-
-    fun loadAppLockEnabled(context: Context): Boolean {
-        return context.getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE)
-            .getBoolean(KEY_APP_LOCK_ENABLED, false)
-    }
-
-    fun saveAppLockEnabled(context: Context, value: Boolean) {
-        context.getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE)
-            .edit()
-            .putBoolean(KEY_APP_LOCK_ENABLED, value)
-            .apply()
-    }
-
-    fun loadAutoLockTimeout(context: Context): AutoLockTimeout {
-        val name = context.getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE)
-            .getString(KEY_AUTO_LOCK_TIMEOUT, AutoLockTimeout.INSTANT.name)
-        return try { AutoLockTimeout.valueOf(name ?: AutoLockTimeout.INSTANT.name) } catch (e: Exception) { AutoLockTimeout.INSTANT }
-    }
-
-    fun saveAutoLockTimeout(context: Context, option: AutoLockTimeout) {
-        context.getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE)
-            .edit()
-            .putString(KEY_AUTO_LOCK_TIMEOUT, option.name)
-            .apply()
-    }
-
-    fun hasSeenTutorial(context: Context): Boolean {
-        return context.getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE)
-            .getBoolean("has_seen_tutorial", false)
-    }
-
-    fun setHasSeenTutorial(context: Context, value: Boolean) {
-        context.getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE)
-            .edit()
-            .putBoolean("has_seen_tutorial", value)
-            .apply()
-    }
-}
 object StartupPreload {
     @Volatile var habits: List<Habit>? = null
     @Volatile var habitStatus: Map<Pair<Long, LocalDate>, HabitStatus>? = null
@@ -1241,7 +825,10 @@ object StartupPreload {
     fun run(context: Context) {
         habits = runCatching { HabitStorage.load(context) }.getOrNull()
         habitStatus = runCatching { HabitStorage.loadStatus(context) }.getOrNull()
-        todos = runCatching { TodoStorage.load(context) }.getOrNull()
+        todos = runCatching {
+            val cutoff = LocalDate.now().minusDays(10)
+            TodoStorage.load(context).filter { !it.date.isBefore(cutoff) }
+        }.getOrNull()
     }
 }
 
@@ -1277,495 +864,6 @@ class MainActivity : FragmentActivity() {
 
 @OptIn(ExperimentalAnimationApi::class)
 const val MAX_ACTIVE_HABITS = 7
-
-@Composable
-fun AppRoot() {
-    val context = LocalContext.current
-
-    var showPermissionDialog by remember { mutableStateOf(false) }
-    var dialogWantsNotifications by remember { mutableStateOf(false) }
-    var dialogWantsStorage by remember { mutableStateOf(false) }
-    var pendingPermissionAction by remember { mutableStateOf<String?>(null) }
-    var showCoachMarks by remember { mutableStateOf(false) }
-
-    fun checkAndShowPermissionDialog() {
-        val needsNotifications = Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU &&
-            context.checkSelfPermission(Manifest.permission.POST_NOTIFICATIONS) != PackageManager.PERMISSION_GRANTED
-        val needsStorage = !hasStorageAccess(context)
-        if (needsNotifications || needsStorage) {
-            dialogWantsNotifications = needsNotifications
-            dialogWantsStorage = needsStorage
-            showPermissionDialog = true
-        }
-    }
-
-    LaunchedEffect(Unit) {
-
-        if (!SettingsStorage.hasSeenTutorial(context)) {
-            showCoachMarks = true
-        } else {
-            checkAndShowPermissionDialog()
-        }
-        withContext(Dispatchers.Default) { HabitReminderScheduler.rescheduleAll(context) }
-    }
-
-    LaunchedEffect(pendingPermissionAction) {
-        when (pendingPermissionAction) {
-            "notifications" -> {
-                delay(300)
-                context.getSharedPreferences("habit_prefs", Context.MODE_PRIVATE)
-                    .edit().putBoolean("notif_permission_requested", true).apply()
-
-                val activity = context as? Activity
-                if (activity != null && Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
-                    ActivityCompat.requestPermissions(
-                        activity,
-                        arrayOf(Manifest.permission.POST_NOTIFICATIONS),
-                        9001
-                    )
-                }
-                pendingPermissionAction = null
-            }
-            "storage" -> {
-                delay(300)
-                if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.R) {
-                    val intent = Intent(
-                        Settings.ACTION_MANAGE_APP_ALL_FILES_ACCESS_PERMISSION,
-                        Uri.parse("package:${context.packageName}")
-                    )
-
-                    context.startActivity(intent)
-                } else {
-                    val activity = context as? Activity
-                    if (activity != null) {
-                        ActivityCompat.requestPermissions(
-                            activity,
-                            arrayOf(Manifest.permission.READ_EXTERNAL_STORAGE),
-                            9002
-                        )
-                    }
-                }
-                pendingPermissionAction = null
-            }
-            else -> {}
-        }
-    }
-
-    if (showPermissionDialog) {
-        PermissionsRequiredDialog(
-            showNotifications = dialogWantsNotifications,
-            showStorage = dialogWantsStorage,
-            onAllowNotifications = {
-                dialogWantsNotifications = false
-                if (!dialogWantsStorage) showPermissionDialog = false
-                pendingPermissionAction = "notifications"
-            },
-            onAllowStorage = {
-                dialogWantsStorage = false
-                if (!dialogWantsNotifications) showPermissionDialog = false
-                pendingPermissionAction = "storage"
-            },
-            onDismiss = { showPermissionDialog = false }
-        )
-    }
-
-    LaunchErrorState.message?.let { fullMessage ->
-        AlertDialog(
-            onDismissRequest = { LaunchErrorState.message = null },
-            title = { Text("Launch error (debug)") },
-            text = {
-                Column(modifier = Modifier.verticalScroll(rememberScrollState())) {
-                    SelectionContainer {
-                        Text(fullMessage, fontSize = 13.sp)
-                    }
-                }
-            },
-            confirmButton = {
-                TextButton(onClick = { LaunchErrorState.message = null }) { Text("OK") }
-            }
-        )
-    }
-
-    LaunchErrorState.message?.let { fullMessage ->
-        AlertDialog(
-            onDismissRequest = { LaunchErrorState.message = null },
-            title = { Text("Launch error (debug)") },
-            text = {
-                Column(modifier = Modifier.verticalScroll(rememberScrollState())) {
-                    SelectionContainer {
-                        Text(fullMessage, fontSize = 13.sp)
-                    }
-                }
-            },
-            confirmButton = {
-                TextButton(onClick = { LaunchErrorState.message = null }) { Text("OK") }
-            }
-        )
-    }
-
-    LaunchErrorState.message?.let { fullMessage ->
-        AlertDialog(
-            onDismissRequest = { LaunchErrorState.message = null },
-            title = { Text("Launch error (debug)") },
-            text = {
-                Column(modifier = Modifier.verticalScroll(rememberScrollState())) {
-                    SelectionContainer {
-                        Text(fullMessage, fontSize = 13.sp)
-                    }
-                }
-            },
-            confirmButton = {
-                TextButton(onClick = { LaunchErrorState.message = null }) { Text("OK") }
-            }
-        )
-    }
-
-    var currentScreen by remember { mutableStateOf(Screen.HOME) }
-    var showAddHabit by remember { mutableStateOf(false) }
-    BackHandler(enabled = !showAddHabit && (currentScreen == Screen.TASKS || currentScreen == Screen.SETTINGS)) {
-        currentScreen = Screen.HOME
-    }
-    var editingHabit by remember { mutableStateOf<Habit?>(null) }
-    var newHabitStartDate by remember { mutableStateOf(LocalDate.now()) }
-    var showDeletedBanner by remember { mutableStateOf(false) }
-    var showHabitLimitBanner by remember { mutableStateOf(false) }
-    var showTodoDeletedBanner by remember { mutableStateOf(false) }
-    var showDeleteAllBanner by remember { mutableStateOf(false) }
-        val habits = remember {
-        mutableStateListOf<Habit>().apply { addAll(StartupPreload.habits ?: HabitStorage.load(context)) }
-    }
-    val habitStatus = remember {
-        mutableStateMapOf<Pair<Long, LocalDate>, HabitStatus>().apply { putAll(StartupPreload.habitStatus ?: HabitStorage.loadStatus(context)) }
-    }
-    val todos = remember {
-        mutableStateListOf<HomeTodoItem>().apply { addAll(StartupPreload.todos ?: TodoStorage.load(context)) }
-    }
-    var firstDayOfWeek by remember { mutableStateOf(SettingsStorage.loadFirstDayOfWeek(context)) }
-    var showStreakCount by remember { mutableStateOf(SettingsStorage.loadShowStreakCount(context)) }
-    var defaultSortOption by remember { mutableStateOf(SettingsStorage.loadDefaultSortOrder(context)) }
-    var autoScanEnabled by remember { mutableStateOf(SettingsStorage.loadAutoScan(context)) }
-    var preferredPdfPackage by remember { mutableStateOf(SettingsStorage.loadPreferredPdfApp(context)) }
-    var fileSizeUnit by remember { mutableStateOf(SettingsStorage.loadFileSizeUnit(context)) }
-    var soundOnComplete by remember { mutableStateOf(SettingsStorage.loadSoundOnComplete(context)) }
-    var appLockEnabled by remember { mutableStateOf(SettingsStorage.loadAppLockEnabled(context)) }
-    var autoLockTimeout by remember { mutableStateOf(SettingsStorage.loadAutoLockTimeout(context)) }
-    var isAppUnlocked by remember { mutableStateOf(!SettingsStorage.loadAppLockEnabled(context)) }
-    var lastBackgroundedAt by remember { mutableStateOf(0L) }
-    val lifecycleOwner = LocalLifecycleOwner.current
-
-    val previousTodos = remember { java.util.concurrent.ConcurrentHashMap<Long, HomeTodoItem>() }
-
-    fun persistTodos(snapshot: List<HomeTodoItem>) {
-        TodoStorage.save(context, snapshot)
-        val currentIds = snapshot.map { it.id }.toSet()
-        previousTodos.keys.filter { it !in currentIds }.forEach {
-            TodoReminderScheduler.cancel(context, it)
-            previousTodos.remove(it)
-        }
-        snapshot.forEach { todo ->
-            val prev = previousTodos[todo.id]
-            if (prev != todo && (todo.reminderTime != null || prev?.reminderTime != null)) {
-                TodoReminderScheduler.schedule(context, todo)
-            }
-            previousTodos[todo.id] = todo
-        }
-    }
-
-    LaunchedEffect(Unit) {
-        snapshotFlow { habits.toList() }.collectLatest { snapshot ->
-            delay(300)
-            withContext(Dispatchers.IO) { HabitStorage.save(context, snapshot) }
-        }
-    }
-
-    LaunchedEffect(Unit) {
-        snapshotFlow { todos.toList() }.collectLatest { snapshot ->
-            delay(300)
-            withContext(Dispatchers.IO) { persistTodos(snapshot) }
-        }
-    }
-
-    LaunchedEffect(Unit) {
-        snapshotFlow { habitStatus.toMap() }.collectLatest { snapshot ->
-            delay(300)
-            withContext(Dispatchers.IO) { HabitStorage.saveStatus(context, snapshot) }
-        }
-    }
-
-    LaunchedEffect(firstDayOfWeek) {
-        SettingsStorage.saveFirstDayOfWeek(context, firstDayOfWeek)
-    }
-
-    LaunchedEffect(showStreakCount) {
-        SettingsStorage.saveShowStreakCount(context, showStreakCount)
-    }
-
-    LaunchedEffect(defaultSortOption) {
-        SettingsStorage.saveDefaultSortOrder(context, defaultSortOption)
-    }
-
-    LaunchedEffect(autoScanEnabled) {
-        SettingsStorage.saveAutoScan(context, autoScanEnabled)
-    }
-
-    LaunchedEffect(preferredPdfPackage) {
-        SettingsStorage.savePreferredPdfApp(context, preferredPdfPackage)
-    }
-
-    LaunchedEffect(fileSizeUnit) {
-        SettingsStorage.saveFileSizeUnit(context, fileSizeUnit)
-    }
-
-    LaunchedEffect(Unit) {
-        CompletionSoundPlayer.init(context)
-    }
-    DisposableEffect(Unit) {
-        onDispose { CompletionSoundPlayer.release() }
-    }
-
-    LaunchedEffect(soundOnComplete) {
-        SettingsStorage.saveSoundOnComplete(context, soundOnComplete)
-    }
-
-    LaunchedEffect(appLockEnabled) {
-        SettingsStorage.saveAppLockEnabled(context, appLockEnabled)
-    }
-
-    LaunchedEffect(autoLockTimeout) {
-        SettingsStorage.saveAutoLockTimeout(context, autoLockTimeout)
-    }
-
-    DisposableEffect(lifecycleOwner, appLockEnabled, autoLockTimeout) {
-        val lockObserver = LifecycleEventObserver { _, event ->
-            when (event) {
-                Lifecycle.Event.ON_STOP -> {
-                    HabitStorage.save(context, habits.toList())
-                    HabitStorage.saveStatus(context, habitStatus.toMap())
-                    persistTodos(todos.toList())
-                    if (appLockEnabled) {
-                        lastBackgroundedAt = System.currentTimeMillis()
-                    }
-                }
-                Lifecycle.Event.ON_START -> {
-                    if (appLockEnabled && lastBackgroundedAt != 0L) {
-                        val elapsed = System.currentTimeMillis() - lastBackgroundedAt
-                        if (elapsed >= autoLockTimeout.millis) {
-                            isAppUnlocked = false
-                        }
-                    }
-                }
-                else -> {}
-            }
-        }
-        lifecycleOwner.lifecycle.addObserver(lockObserver)
-        onDispose { lifecycleOwner.lifecycle.removeObserver(lockObserver) }
-    }
-
-    Box(
-        modifier = Modifier
-            .fillMaxSize()
-            .background(DarkBg)
-    ) {
-    AnimatedContent(
-        targetState = appLockEnabled && !isAppUnlocked,
-        transitionSpec = {
-            fadeIn(animationSpec = tween(400)) togetherWith fadeOut(animationSpec = tween(400))
-        },
-        label = "lockScreenTransition"
-    ) { isLocked ->
-    if (isLocked) {
-        AppLockScreen(onUnlock = { isAppUnlocked = true })
-    } else {
-    AnimatedContent(
-        targetState = showAddHabit,
-        transitionSpec = {
-            val slideSpec = spring<IntOffset>(
-                dampingRatio = Spring.DampingRatioNoBouncy,
-                stiffness = Spring.StiffnessMediumLow
-            )
-            val fadeSpec = tween<Float>(220, easing = FastOutSlowInEasing)
-            if (targetState) {
-                (slideInHorizontally(animationSpec = slideSpec) { fullWidth -> fullWidth } + fadeIn(animationSpec = fadeSpec))
-                    .togetherWith(slideOutHorizontally(animationSpec = slideSpec) { fullWidth -> -fullWidth / 4 } + fadeOut(animationSpec = fadeSpec))
-            } else {
-                (slideInHorizontally(animationSpec = slideSpec) { fullWidth -> -fullWidth / 4 } + fadeIn(animationSpec = fadeSpec))
-                    .togetherWith(slideOutHorizontally(animationSpec = slideSpec) { fullWidth -> fullWidth } + fadeOut(animationSpec = fadeSpec))
-            }
-        },
-        label = "addHabitTransition"
-    ) { isAddHabit ->
-        if (isAddHabit) {
-            AddHabitScreen(
-                existingHabit = editingHabit,
-                initialStartDate = newHabitStartDate,
-                onBack = {
-                    showAddHabit = false
-                    editingHabit = null
-                },
-                onSave = { habit ->
-                    val index = habits.indexOfFirst { it.id == habit.id }
-                    if (index != -1) {
-                        habits[index] = habit
-                    } else if (habits.size < MAX_ACTIVE_HABITS) {
-                        habits.add(habit)
-                    }
-                    if (habit.notificationsEnabled && habit.startTime != null) {
-                        HabitReminderScheduler.schedule(context, habit)
-                    } else {
-                        HabitReminderScheduler.cancel(context, habit.id)
-                    }
-                    showAddHabit = false
-                    editingHabit = null
-                },
-                onDelete = {
-                    val habitId = editingHabit?.id
-                    if (habitId != null) {
-                        habits.removeAll { it.id == habitId }
-                        val keysToRemove = habitStatus.keys.filter { it.first == habitId }
-                        keysToRemove.forEach { habitStatus.remove(it) }
-                        HabitReminderScheduler.cancel(context, habitId)
-                    }
-                    showAddHabit = false
-                    editingHabit = null
-                    showDeletedBanner = true
-                }
-            )
-        } else {
-            Scaffold(
-                containerColor = DarkBg,
-                bottomBar = { BottomNavBar(currentScreen) { currentScreen = it } }
-            ) { padding ->
-                Box(
-                    modifier = Modifier
-                        .fillMaxSize()
-                        .padding(
-                            top = padding.calculateTopPadding(),
-                            start = padding.calculateStartPadding(LocalLayoutDirection.current),
-                            end = padding.calculateEndPadding(LocalLayoutDirection.current)
-                        )
-                ) {
-                    val saveableStateHolder = rememberSaveableStateHolder()
-                    Crossfade(
-                        targetState = currentScreen,
-                        animationSpec = tween(220),
-                        label = "tabSwitchTransition"
-                    ) { screen ->
-                    saveableStateHolder.SaveableStateProvider(screen.name) {
-                    when (screen) {
-                        Screen.HOME -> HomeTodoScreen(
-                            bottomContentPadding = padding.calculateBottomPadding(),
-                            firstDayOfWeek = firstDayOfWeek,
-                            todos = todos,
-                            soundOnComplete = soundOnComplete,
-                            onTaskDeleted = { showTodoDeletedBanner = true },
-                            onSettingsClick = { currentScreen = Screen.SETTINGS }
-                        )
-                        Screen.TASKS -> TasksScreen(
-                            habits = habits,
-                            habitStatus = habitStatus,
-                            onAddHabit = { startDate ->
-                                if (habits.size >= MAX_ACTIVE_HABITS) {
-                                    showHabitLimitBanner = true
-                                } else {
-                                    editingHabit = null
-                                    newHabitStartDate = startDate
-                                    showAddHabit = true
-                                }
-                            },
-                            onEditHabit = { habit -> editingHabit = habit; showAddHabit = true },
-                            showDeletedBanner = showDeletedBanner,
-                            onDismissDeletedBanner = { showDeletedBanner = false },
-                            showHabitLimitBanner = showHabitLimitBanner,
-                            onDismissHabitLimitBanner = { showHabitLimitBanner = false },
-                            bottomContentPadding = padding.calculateBottomPadding(),
-                            firstDayOfWeek = firstDayOfWeek,
-                            showStreakCount = showStreakCount,
-                            soundOnComplete = soundOnComplete,
-                            showCoachMarks = showCoachMarks,
-                            onCoachMarksDismissed = {
-                                showCoachMarks = false
-                                SettingsStorage.setHasSeenTutorial(context, true)
-                                checkAndShowPermissionDialog()
-                            }
-                        )
-                        Screen.PDFS -> PdfsScreen(
-                            defaultSortOption = defaultSortOption,
-                            autoScanEnabled = autoScanEnabled,
-                            preferredPdfPackage = preferredPdfPackage,
-                            fileSizeUnit = fileSizeUnit,
-                            onSortOptionPersist = { defaultSortOption = it },
-                            bottomContentPadding = padding.calculateBottomPadding()
-                        )
-                        Screen.SETTINGS -> SettingsScreen(
-                            onDeleteAllData = {
-                                habits.clear()
-                                habitStatus.clear()
-                                todos.clear()
-                                showDeleteAllBanner = true
-                            },
-                            bottomContentPadding = padding.calculateBottomPadding(),
-                            firstDayOfWeek = firstDayOfWeek,
-                            onFirstDayOfWeekChange = { firstDayOfWeek = it },
-                            showStreakCount = showStreakCount,
-                            onShowStreakCountChange = { showStreakCount = it },
-                            soundOnComplete = soundOnComplete,
-                            onSoundOnCompleteChange = { soundOnComplete = it },
-                            defaultSortOption = defaultSortOption,
-                            onDefaultSortOptionChange = { defaultSortOption = it },
-                            autoScanEnabled = autoScanEnabled,
-                            onAutoScanEnabledChange = { autoScanEnabled = it },
-                            preferredPdfPackage = preferredPdfPackage,
-                            onPreferredPdfPackageChange = { preferredPdfPackage = it },
-                            fileSizeUnit = fileSizeUnit,
-                            onFileSizeUnitChange = { fileSizeUnit = it },
-                            appLockEnabled = appLockEnabled,
-                            onAppLockEnabledChange = { appLockEnabled = it },
-                            autoLockTimeout = autoLockTimeout,
-                            onAutoLockTimeoutChange = { autoLockTimeout = it }
-                        )
-                    }
-                    }
-                }
-            }
-        }
-    }
-    }
-    }
-    }
-    TopBanner(
-        visible = showDeletedBanner,
-        message = "Habit deleted successfully",
-        icon = Icons.Default.CheckCircle,
-        iconTint = Color(0xFF4CAF50),
-        onDismiss = { showDeletedBanner = false },
-        modifier = Modifier.align(Alignment.TopCenter)
-    )
-    TopBanner(
-        visible = showTodoDeletedBanner,
-        message = "Task deleted successfully",
-        icon = Icons.Default.CheckCircle,
-        iconTint = Color(0xFF4CAF50),
-        onDismiss = { showTodoDeletedBanner = false },
-        modifier = Modifier.align(Alignment.TopCenter)
-    )
-    TopBanner(
-        visible = showDeleteAllBanner,
-        message = "All data deleted successfully",
-        icon = Icons.Default.CheckCircle,
-        iconTint = Color(0xFF4CAF50),
-        onDismiss = { showDeleteAllBanner = false },
-        modifier = Modifier.align(Alignment.TopCenter)
-    )
-    TopBanner(
-        visible = showHabitLimitBanner,
-        message = "Maximum $MAX_ACTIVE_HABITS habits reached — delete one to add a new habit",
-        icon = Icons.Default.Info,
-        iconTint = Color(0xFFFFA726),
-        onDismiss = { showHabitLimitBanner = false },
-        modifier = Modifier.align(Alignment.TopCenter)
-    )
-}
-}
 
 @Composable
 fun TopBanner(
@@ -1849,21 +947,6 @@ fun BottomNavBar(current: Screen, onSelect: (Screen) -> Unit) {
                 unselectedTextColor = TextGray
             )
         )
-    }
-}
-
-@OptIn(ExperimentalMaterial3Api::class)
-@Composable
-fun NavIconWithTooltip(label: String, icon: @Composable () -> Unit) {
-    TooltipBox(
-        positionProvider = TooltipDefaults.rememberPlainTooltipPositionProvider(),
-        tooltip = { PlainTooltip { Text(label) } },
-        state = rememberTooltipState(),
-        modifier = Modifier.size(width = 56.dp, height = 32.dp)
-    ) {
-        Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
-            icon()
-        }
     }
 }
 
@@ -2128,7 +1211,7 @@ fun HomeTodoScreen(bottomContentPadding: Dp = 0.dp, firstDayOfWeek: DayOfWeek = 
                         onMonthSelected = { month ->
                             val firstOfMonth = LocalDate.of(today.year, month, 1)
                             val targetMonday = weekStartFor(firstOfMonth, firstDayOfWeek)
-                            val weeksBetween = java.time.temporal.ChronoUnit.WEEKS.between(currentWeekMonday, targetMonday)
+                            val weeksBetween = ChronoUnit.WEEKS.between(currentWeekMonday, targetMonday)
                             coroutineScope.launch {
                                 pagerState.scrollToPage((centerPage + weeksBetween).toInt())
                             }
@@ -2494,256 +1577,6 @@ fun AddSheetHost(isVisible: () -> Boolean, content: @Composable () -> Unit) {
 }
 
 @Composable
-fun QuickAddTodoSheet(
-    initialText: String = "",
-    initialReminderTime: LocalTime? = null,
-    onDismiss: () -> Unit,
-    onSave: (String, LocalTime?) -> Unit
-) {
-    var textFieldValue by remember {
-        mutableStateOf(
-            TextFieldValue(
-                text = initialText,
-                selection = TextRange(initialText.length)
-            )
-        )
-    }
-    val text = textFieldValue.text
-    var reminderTime by remember { mutableStateOf(initialReminderTime) }
-    var showTimePicker by remember { mutableStateOf(false) }
-    val focusRequester = remember { FocusRequester() }
-    val keyboardController = LocalSoftwareKeyboardController.current
-
-    var closeAction by remember { mutableStateOf<(() -> Unit)?>(null) }
-    val exitProgress by animateFloatAsState(
-        targetValue = if (closeAction != null) 1f else 0f,
-        animationSpec = tween(durationMillis = 220, easing = FastOutLinearInEasing),
-        label = "quickAddSheetExit"
-    )
-    var hasEntered by remember { mutableStateOf(false) }
-    val enterProgress by animateFloatAsState(
-        targetValue = if (hasEntered) 1f else 0f,
-        animationSpec = tween(durationMillis = 180, easing = FastOutSlowInEasing),
-        label = "quickAddSheetEnter"
-    )
-    LaunchedEffect(closeAction) {
-        val action = closeAction
-        if (action != null) {
-            delay(240)
-            action()
-        }
-    }
-    val dismissWithAnimation: () -> Unit = {
-        if (closeAction == null) closeAction = onDismiss
-    }
-
-    BackHandler(onBack = dismissWithAnimation)
-
-    LaunchedEffect(Unit) {
-        // Do real VSync frames ka wait — ye guarantee karta hai ki content
-        // actually screen pe draw/composite ho chuka hai, sirf measured nahi hai.
-        // Cold start pe ye gap bada ho sakta hai isliye onGloballyPositioned kaafi nahi tha.
-        withFrameNanos {}
-        withFrameNanos {}
-        hasEntered = true
-        // Entrance animation ko visibly shuru hone ka thoda time do, phir hi
-        // keyboard request karo — isse keyboard kabhi bhi popup se pehle nahi uthega,
-        // chahe device cold ho ya warm.
-        delay(80)
-        repeat(20) {
-            try {
-                focusRequester.requestFocus()
-                return@LaunchedEffect
-            } catch (e: IllegalStateException) {
-                delay(16)
-            }
-        }
-    }
-
-    Dialog(
-        onDismissRequest = dismissWithAnimation,
-        properties = DialogProperties(
-            usePlatformDefaultWidth = false,
-            decorFitsSystemWindows = false
-        )
-    ) {
-    val currentOnDismiss by rememberUpdatedState(dismissWithAnimation)
-    val dialogWindow = (LocalView.current.parent as? DialogWindowProvider)?.window
-    SideEffect { dialogWindow?.setDimAmount(0f) }
-    val dialogView = LocalView.current
-    val hideDialogKeyboard: () -> Unit = {
-        dialogWindow?.let { w ->
-            WindowCompat.getInsetsController(w, dialogView)
-                .hide(androidx.core.view.WindowInsetsCompat.Type.ime())
-        }
-    }
-    val imeInsets = WindowInsets.ime
-    val imeDensity = LocalDensity.current
-    LaunchedEffect(Unit) {
-        var lastImeHeight = imeInsets.getBottom(imeDensity)
-        var peakImeHeight = 0
-        var keyboardHasRisen = false
-        val closeTolerancePx = with(imeDensity) { 8.dp.toPx() }
-        snapshotFlow { imeInsets.getBottom(imeDensity) }
-            .collect { imeHeight ->
-                if (imeHeight > lastImeHeight) keyboardHasRisen = true
-                lastImeHeight = imeHeight
-                if (keyboardHasRisen) {
-                    if (imeHeight > peakImeHeight) {
-                        peakImeHeight = imeHeight
-                    } else if (imeHeight < peakImeHeight - closeTolerancePx) {
-                        peakImeHeight = 0
-                        keyboardHasRisen = false
-                        if (!showTimePicker) currentOnDismiss()
-                    }
-                }
-            }
-    }
-    Box(
-        modifier = Modifier
-            .fillMaxSize()
-            .drawBehind {
-                drawRect(Color.Black.copy(alpha = 0.6f * (1f - exitProgress)))
-            }
-            .clickable(
-                indication = null,
-                interactionSource = remember { MutableInteractionSource() }
-            ) {
-                hideDialogKeyboard()
-                dismissWithAnimation()
-            },
-        contentAlignment = Alignment.BottomCenter
-    ) {
-        Surface(
-            modifier = Modifier
-                .fillMaxWidth()
-                .padding(horizontal = 10.dp)
-                .windowInsetsPadding(WindowInsets.ime.union(WindowInsets.navigationBars))
-                .padding(bottom = 8.dp)
-                .graphicsLayer {
-                    val shownFraction = enterProgress * (1f - exitProgress)
-                    translationY = (1f - shownFraction) * size.height
-                    alpha = shownFraction
-                }
-                .clickable(
-                    indication = null,
-                    interactionSource = remember { MutableInteractionSource() }
-                ) { /* absorb taps so sheet doesn't dismiss when tapped */ },
-            shape = RoundedCornerShape(14.dp),
-            color = CardBg
-        ) {
-            Column(
-                modifier = Modifier.padding(start = 20.dp, top = 24.dp, end = 20.dp, bottom = 14.dp)
-            ) {
-                Row(verticalAlignment = Alignment.CenterVertically) {
-                    Box(
-                        modifier = Modifier
-                            .size(16.dp)
-                            .clip(CircleShape)
-                            .background(Color.Transparent)
-                            .border(width = 1.5.dp, color = TextGray, shape = CircleShape)
-                    )
-                    Spacer(Modifier.width(12.dp))
-                    OutlinedTextField(
-                        value = textFieldValue,
-                        onValueChange = { textFieldValue = it },
-                        placeholder = {
-                            Text("Add a new task...", color = TextGray, fontStyle = FontStyle.Italic)
-                        },
-                        modifier = Modifier
-                            .weight(1f)
-                            .heightIn(min = 56.dp, max = 160.dp)
-                            .focusRequester(focusRequester),
-                        colors = OutlinedTextFieldDefaults.colors(
-                            focusedTextColor = Color.White,
-                            unfocusedTextColor = Color.White,
-                            focusedBorderColor = Color.Transparent,
-                            unfocusedBorderColor = Color.Transparent
-                        )
-                    )
-                }
-                Spacer(Modifier.height(16.dp))
-                Row(
-                    modifier = Modifier.fillMaxWidth(),
-                    horizontalArrangement = Arrangement.SpaceBetween,
-                    verticalAlignment = Alignment.CenterVertically
-                ) {
-                    Row(
-                        modifier = Modifier
-                            .clip(RoundedCornerShape(8.dp))
-                            .background(if (reminderTime != null) BlueAccent else Color(0xFF33343D))
-                            .padding(start = 8.dp, top = 6.dp, end = 10.dp, bottom = 6.dp),
-                        verticalAlignment = Alignment.CenterVertically
-                    ) {
-                        Row(
-                            modifier = Modifier.clickable { showTimePicker = true },
-                            verticalAlignment = Alignment.CenterVertically
-                        ) {
-                            Icon(Icons.Default.Notifications, contentDescription = null, tint = Color.White, modifier = Modifier.size(16.dp))
-                            Spacer(Modifier.width(6.dp))
-                            if (reminderTime != null) {
-                                Text(
-                                    reminderTime!!.format(DateTimeFormatter.ofPattern("HH:mm")),
-                                    color = Color.White,
-                                    fontWeight = FontWeight.Bold,
-                                    fontSize = 13.sp
-                                )
-                            } else {
-                                Text("Set reminder", color = Color.White, fontWeight = FontWeight.Bold, fontSize = 13.sp)
-                            }
-                        }
-                        if (reminderTime != null) {
-                            Spacer(Modifier.width(10.dp))
-                            Box(
-                                modifier = Modifier
-                                    .width(1.dp)
-                                    .height(14.dp)
-                                    .background(Color.White.copy(alpha = 0.4f))
-                            )
-                            Spacer(Modifier.width(10.dp))
-                            Icon(
-                                Icons.Default.Close,
-                                contentDescription = "Cancel reminder",
-                                tint = Color.White,
-                                modifier = Modifier
-                                    .clickable(
-                                        indication = null,
-                                        interactionSource = remember { MutableInteractionSource() }
-                                    ) { reminderTime = null }
-                                    .padding(horizontal = 4.dp, vertical = 3.dp)
-                                    .size(16.dp)
-                            )
-                        }
-                    }
-                    Box(
-                        modifier = Modifier
-                            .clip(RoundedCornerShape(8.dp))
-                            .background(if (text.isNotBlank()) BlueAccent else Color(0xFF33343D))
-                            .clickable(enabled = text.isNotBlank()) {
-                                keyboardController?.hide()
-                                if (closeAction == null) {
-                                    closeAction = { onSave(text, reminderTime) }
-                                }
-                            }
-                            .padding(horizontal = 10.dp, vertical = 6.dp)
-                    ) {
-                        Text("Done", color = Color.White, fontWeight = FontWeight.Bold)
-                    }
-                }
-            }
-        }
-    }
-    }
-
-    if (showTimePicker) {
-        HabitTimePickerDialog(
-            initialTime = reminderTime,
-            onDismiss = { showTimePicker = false },
-            onConfirm = { reminderTime = it; showTimePicker = false; keyboardController?.show() }
-        )
-    }
-}
-@Composable
 fun SettingsCard(content: @Composable ColumnScope.() -> Unit) {
     Column(
         modifier = Modifier
@@ -3010,7 +1843,7 @@ fun SettingsScreen(
                     iconBg = Color(0xFF3B7BF5),
                     onClick = {
 
-                        val shareText = "I've been using Streakk to track my daily habits. It's simple, keeps everything on your device, and doesn't need an account. Thought you might find it useful:\nhttps://github.com//AryanV4R/Streakk"
+                        val shareText = "I've been using Streakk to track my daily habits and to-do tasks. It's simple, keeps everything on your device, and doesn't need an account. Thought you might find it useful:\nhttps://github.com//AryanV4R/Streakk"
                         val shareIntent = Intent(Intent.ACTION_SEND).apply {
                             type = "text/plain"
                             putExtra(Intent.EXTRA_TEXT, shareText)
@@ -3350,109 +2183,6 @@ fun autostartSettingsIntent(context: Context): Intent {
         }
     }
 }
-@Composable
-fun PrivacyPolicyScreen(onBack: () -> Unit, bottomContentPadding: Dp = 0.dp) {
-    BackHandler(onBack = onBack)
-    val bodyColor = Color(0xFFC5C6CE)
-
-    @Composable
-    fun sectionTitle(text: String) {
-        Text(text, color = Color.White, fontSize = 16.sp, fontWeight = FontWeight.Bold)
-        Spacer(Modifier.height(6.dp))
-    }
-
-    @Composable
-    fun sectionBody(text: String) {
-        Text(text, color = bodyColor, fontSize = 14.sp, lineHeight = 21.sp)
-        Spacer(Modifier.height(20.dp))
-    }
-
-    Column(
-        modifier = Modifier
-            .fillMaxSize()
-            .background(DarkBg)
-            .verticalScroll(rememberScrollState())
-            .padding(horizontal = 20.dp)
-            .padding(bottom = bottomContentPadding)
-    ) {
-        Spacer(Modifier.height(20.dp))
-        Row(verticalAlignment = Alignment.CenterVertically) {
-            Icon(
-                Icons.AutoMirrored.Filled.ArrowBack,
-                contentDescription = "Back",
-                tint = Color.White,
-                modifier = Modifier.clickable { onBack() }
-            )
-            Spacer(Modifier.width(16.dp))
-            Text("Privacy Policy", color = Color.White, fontSize = 22.sp, fontWeight = FontWeight.Bold)
-        }
-        Spacer(Modifier.height(8.dp))
-        Text("Last updated: September 2026", color = TextGray, fontSize = 13.sp)
-        Spacer(Modifier.height(24.dp))
-
-        sectionBody(
-            "Streakk (\"we\", \"our\", \"the app\") is a habit and PDF reading app. " +
-            "This Privacy Policy explains what information the app handles and how, in plain language."
-        )
-
-        sectionTitle("1. Data We Collect")
-        sectionBody(
-            "Streakk does not collect, transmit, or sell any personal data to us or to any third party. " +
-            "We do not run our own servers and have no access to your habits or files. " +
-            "Everything you create in the app stays on your device."
-        )
-
-        sectionTitle("2. Local Storage")
-        sectionBody(
-            "Your habits, streaks, and app preferences are saved locally on your device using " +
-            "Android's standard app storage. This data is only readable by Streakk and is removed " +
-            "automatically if you uninstall the app, or manually at any time using \"Delete all data\" " +
-            "in Settings."
-        )
-
-        sectionTitle("3. Permissions")
-        sectionBody(
-            "Streakk requests storage access solely to let you browse and open PDF files that already " +
-            "exist on your device. We do not read, copy, or upload any file contents — the app simply " +
-            "displays files you choose to open. If you enable habit reminders, they are scheduled locally " +
-            "on your device and are never sent anywhere."
-        )
-
-        sectionTitle("4. Third-Party Services")
-        sectionBody(
-            "The \"Feedback\", \"Rate us\", and \"Share with friends\" options in Settings open your " +
-            "device's email app or the Google Play Store. These are standard Android system actions — " +
-            "Streakk does not share any of your app data with them, and any information you choose to " +
-            "send (for example, in a feedback email) is handled directly by that app, under its own " +
-            "privacy policy."
-        )
-
-        sectionTitle("5. Children's Privacy")
-        sectionBody(
-            "Streakk does not knowingly collect any information from anyone, including children, " +
-            "because the app does not collect information at all. It can be used by any age group."
-        )
-
-        sectionTitle("6. Your Control Over Your Data")
-        sectionBody(
-            "Since all data lives only on your device, you are always in full control of it. You can " +
-            "erase everything at any time from Settings → Delete all data, or by uninstalling the app."
-        )
-
-        sectionTitle("7. Changes to This Policy")
-        sectionBody(
-            "If this policy is ever updated, the new version will be posted here with a revised " +
-            "\"Last updated\" date at the top of this page."
-        )
-
-        sectionTitle("8. Contact Us")
-        sectionBody(
-            "If you have any questions about this Privacy Policy, reach out at idabhinavx@protonmail\u200B.com."
-        )
-
-        Spacer(Modifier.height(20.dp))
-    }
-}
 
 @Composable
 fun FirstDayOfWeekDialog(current: DayOfWeek, onDismiss: () -> Unit, onSelect: (DayOfWeek) -> Unit) {
@@ -3512,148 +2242,6 @@ fun <T> SingleChoiceDialog(
                         Text(optionLabel(option), color = Color.White, fontSize = 16.sp)
                         if (option == current) {
                             Icon(Icons.Default.Check, contentDescription = null, tint = BlueAccent)
-                        }
-                    }
-                }
-            }
-        }
-    }
-}
-
-@Composable
-fun OpenWithDialog(
-    apps: List<Pair<String, String>>,
-    current: String?,
-    onDismiss: () -> Unit,
-    onSelect: (String?) -> Unit
-) {
-    val context = LocalContext.current
-    val sheetNestedScrollConnection = remember {
-        object : NestedScrollConnection {
-            var totalOverscroll = 0f
-            override fun onPostScroll(consumed: Offset, available: Offset, source: NestedScrollSource): Offset {
-                if (available.y > 0f) {
-                    totalOverscroll += available.y
-                    if (totalOverscroll > 300f) {
-                        onDismiss()
-                    }
-                } else {
-                    totalOverscroll = 0f
-                }
-                return Offset.Zero
-            }
-        }
-    }
-    Dialog(
-        onDismissRequest = onDismiss,
-        properties = DialogProperties(usePlatformDefaultWidth = false)
-    ) {
-        Box(
-            modifier = Modifier
-                .fillMaxSize()
-                .clickable(
-                    indication = null,
-                    interactionSource = remember { MutableInteractionSource() }
-                ) { onDismiss() },
-            contentAlignment = Alignment.BottomCenter
-        ) {
-            Surface(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .clickable(
-                        indication = null,
-                        interactionSource = remember { MutableInteractionSource() }
-                    ) {  }
-                    .nestedScroll(sheetNestedScrollConnection),
-                shape = RoundedCornerShape(topStart = 20.dp, topEnd = 20.dp),
-                color = CardBg
-            ) {
-                Column(
-                    modifier = Modifier
-                        .padding(20.dp)
-                        .heightIn(max = 420.dp)
-                        .verticalScroll(rememberScrollState())
-                ) {
-                    Text("Open PDFs with", color = Color.White, fontSize = 18.sp, fontWeight = FontWeight.Bold)
-                    Spacer(Modifier.height(12.dp))
-                    Row(
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .clickable { onSelect(null) }
-                            .padding(vertical = 12.dp),
-                        verticalAlignment = Alignment.CenterVertically,
-                        horizontalArrangement = Arrangement.SpaceBetween
-                    ) {
-                        val ownAppIcon = remember {
-                            try {
-                                context.packageManager.getApplicationIcon(context.packageName).toBitmap().asImageBitmap()
-                            } catch (e: Exception) {
-                                null
-                            }
-                        }
-                        Row(verticalAlignment = Alignment.CenterVertically) {
-                            if (ownAppIcon != null) {
-                                Image(
-                                    bitmap = ownAppIcon,
-                                    contentDescription = null,
-                                    modifier = Modifier
-                                        .size(32.dp)
-                                        .clip(RoundedCornerShape(8.dp))
-                                )
-                            } else {
-                                Box(
-                                    modifier = Modifier
-                                        .size(32.dp)
-                                        .clip(RoundedCornerShape(8.dp))
-                                        .background(Color(0xFF33343D))
-                                )
-                            }
-                            Spacer(Modifier.width(14.dp))
-                            Text("Ask every time", color = Color.White, fontSize = 16.sp)
-                        }
-                        if (current == null) {
-                            Icon(Icons.Default.Check, contentDescription = null, tint = BlueAccent)
-                        }
-                    }
-                    apps.forEach { (pkg, label) ->
-                        val iconBitmap = remember(pkg) {
-                            try {
-                                context.packageManager.getApplicationIcon(pkg).toBitmap().asImageBitmap()
-                            } catch (e: Exception) {
-                                null
-                            }
-                        }
-                        Row(
-                            modifier = Modifier
-                                .fillMaxWidth()
-                                .clickable { onSelect(pkg) }
-                                .padding(vertical = 12.dp),
-                            verticalAlignment = Alignment.CenterVertically,
-                            horizontalArrangement = Arrangement.SpaceBetween
-                        ) {
-                            Row(verticalAlignment = Alignment.CenterVertically) {
-                                if (iconBitmap != null) {
-                                    Image(
-                                        bitmap = iconBitmap,
-                                        contentDescription = null,
-                                        modifier = Modifier
-                                            .size(32.dp)
-                                            .clip(RoundedCornerShape(8.dp))
-                                    )
-                                } else {
-                                    Box(
-                                        modifier = Modifier
-                                            .size(32.dp)
-                                            .clip(RoundedCornerShape(8.dp))
-                                            .background(Color(0xFF33343D))
-                                    )
-                                }
-                                Spacer(Modifier.width(14.dp))
-                                Text(label, color = Color.White, fontSize = 16.sp)
-                            }
-                            if (current == pkg) {
-                                Icon(Icons.Default.Check, contentDescription = null, tint = BlueAccent)
-                            }
                         }
                     }
                 }
@@ -3783,350 +2371,6 @@ fun AppLockScreen(onUnlock: () -> Unit) {
     }
 }
 
-@Composable
-fun AutoLockTimeoutSheet(
-    current: AutoLockTimeout,
-    onDismiss: () -> Unit,
-    onSelect: (AutoLockTimeout) -> Unit
-) {
-    val autoLockSheetNestedScrollConnection = remember {
-        object : NestedScrollConnection {
-            var totalOverscroll = 0f
-            override fun onPostScroll(consumed: Offset, available: Offset, source: NestedScrollSource): Offset {
-                if (available.y > 0f) {
-                    totalOverscroll += available.y
-                    if (totalOverscroll > 300f) {
-                        onDismiss()
-                    }
-                } else {
-                    totalOverscroll = 0f
-                }
-                return Offset.Zero
-            }
-        }
-    }
-    Dialog(
-        onDismissRequest = onDismiss,
-        properties = DialogProperties(usePlatformDefaultWidth = false)
-    ) {
-        Box(
-            modifier = Modifier
-                .fillMaxSize()
-                .clickable(
-                    indication = null,
-                    interactionSource = remember { MutableInteractionSource() }
-                ) { onDismiss() },
-            contentAlignment = Alignment.BottomCenter
-        ) {
-            Surface(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .nestedScroll(autoLockSheetNestedScrollConnection)
-                    .clickable(
-                        indication = null,
-                        interactionSource = remember { MutableInteractionSource() }
-                    ) {  },
-                shape = RoundedCornerShape(topStart = 20.dp, topEnd = 20.dp),
-                color = CardBg
-            ) {
-                Column(
-                    modifier = Modifier
-                        .padding(20.dp)
-                        .heightIn(max = 420.dp)
-                        .verticalScroll(rememberScrollState())
-                ) {
-                    Text("Auto-lock", color = Color.White, fontSize = 18.sp, fontWeight = FontWeight.Bold)
-                    Spacer(Modifier.height(4.dp))
-                    Text("Lock the app after it's in the background for:", color = TextGray, fontSize = 13.sp)
-                    Spacer(Modifier.height(12.dp))
-                    AutoLockTimeout.values().forEach { option ->
-                        Row(
-                            modifier = Modifier
-                                .fillMaxWidth()
-                                .clip(RoundedCornerShape(12.dp))
-                                .clickable { onSelect(option) }
-                                .padding(vertical = 14.dp, horizontal = 4.dp),
-                            verticalAlignment = Alignment.CenterVertically,
-                            horizontalArrangement = Arrangement.SpaceBetween
-                        ) {
-                            Text(option.label, color = Color.White, fontSize = 16.sp)
-                            if (option == current) {
-                                Icon(Icons.Default.Check, contentDescription = null, tint = BlueAccent)
-                            }
-                        }
-                    }
-                    Spacer(Modifier.height(4.dp))
-                }
-            }
-        }
-    }
-}
-
-@Composable
-fun GeneralSettingsScreen(
-    onBack: () -> Unit,
-    bottomContentPadding: Dp = 0.dp,
-    firstDayOfWeek: DayOfWeek = DayOfWeek.MONDAY,
-    onFirstDayOfWeekChange: (DayOfWeek) -> Unit = {},
-    showStreakCount: Boolean = true,
-    onShowStreakCountChange: (Boolean) -> Unit = {},
-    soundOnComplete: Boolean = true,
-    onSoundOnCompleteChange: (Boolean) -> Unit = {},
-    defaultSortOption: PdfSortOption = PdfSortOption.NEWEST,
-    onDefaultSortOptionChange: (PdfSortOption) -> Unit = {},
-    autoScanEnabled: Boolean = true,
-    onAutoScanEnabledChange: (Boolean) -> Unit = {},
-    preferredPdfPackage: String? = null,
-    onPreferredPdfPackageChange: (String?) -> Unit = {},
-    fileSizeUnit: FileSizeUnit = FileSizeUnit.AUTO,
-    onFileSizeUnitChange: (FileSizeUnit) -> Unit = {},
-    appLockEnabled: Boolean = false,
-    onAppLockEnabledChange: (Boolean) -> Unit = {},
-    autoLockTimeout: AutoLockTimeout = AutoLockTimeout.INSTANT,
-    onAutoLockTimeoutChange: (AutoLockTimeout) -> Unit = {}
-) {
-    BackHandler(onBack = onBack)
-    val context = LocalContext.current
-    val configuration = LocalConfiguration.current
-    val currentLocale = remember(configuration) { configuration.locales[0] }
-    val coroutineScope = rememberCoroutineScope()
-    var showFirstDayDialog by remember { mutableStateOf(false) }
-    var showSortDialog by remember { mutableStateOf(false) }
-    var showOpenWithDialog by remember { mutableStateOf(false) }
-    var showFileSizeDialog by remember { mutableStateOf(false) }
-    var showAutoLockDialog by remember { mutableStateOf(false) }
-    var showClearCacheConfirm by remember { mutableStateOf(false) }
-    var showCacheClearedBanner by remember { mutableStateOf(false) }
-    var preferredAppLabel by remember(preferredPdfPackage) {
-        mutableStateOf(
-            preferredPdfPackage?.let {
-                try {
-                    context.packageManager.getApplicationLabel(context.packageManager.getApplicationInfo(it, 0)).toString()
-                } catch (e: Exception) { null }
-            }
-        )
-    }
-    Column(
-        modifier = Modifier
-            .fillMaxSize()
-            .background(DarkBg)
-            .verticalScroll(rememberScrollState())
-            .padding(horizontal = 20.dp)
-    ) {
-        Spacer(Modifier.height(20.dp))
-        Row(verticalAlignment = Alignment.CenterVertically) {
-            Icon(
-                Icons.AutoMirrored.Filled.ArrowBack,
-                contentDescription = "Back",
-                tint = Color.White,
-                modifier = Modifier.clickable { onBack() }
-            )
-            Spacer(Modifier.width(16.dp))
-            Text("General settings", color = Color.White, fontSize = 22.sp, fontWeight = FontWeight.Bold)
-        }
-        Spacer(Modifier.height(24.dp))
-
-        if (showCacheClearedBanner) {
-            LaunchedEffect(showCacheClearedBanner) {
-                delay(2000)
-                showCacheClearedBanner = false
-            }
-            Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.padding(bottom = 12.dp)) {
-                Icon(Icons.Default.CheckCircle, contentDescription = null, tint = Color(0xFF4CAF50), modifier = Modifier.size(18.dp))
-                Spacer(Modifier.width(8.dp))
-                Text("Thumbnail cache cleared", color = Color.White, fontSize = 14.sp)
-            }
-        }
-
-        Text("HABITS & TASKS", color = TextGray, fontSize = 13.sp, fontWeight = FontWeight.Bold)
-        Spacer(Modifier.height(8.dp))
-        SettingsCard {
-            SettingsRow(
-                title = "First day of week",
-                trailingText = firstDayOfWeek.getDisplayName(TextStyle.FULL, currentLocale),
-                onClick = { showFirstDayDialog = true }
-            )
-            HorizontalDivider(color = Color(0xFF3A3B44))
-            SettingsRow(
-                title = "Sound on complete",
-                trailingText = if (soundOnComplete) "On" else "Off",
-                onClick = {
-                    val newValue = !soundOnComplete
-                    onSoundOnCompleteChange(newValue)
-                    if (newValue) CompletionSoundPlayer.play()
-                }
-            )
-            HorizontalDivider(color = Color(0xFF3A3B44))
-            SettingsRow(
-                title = "Show streak count on cards",
-                trailingText = if (showStreakCount) "On" else "Off",
-                onClick = { onShowStreakCountChange(!showStreakCount) }
-            )
-        }
-
-        if (showFirstDayDialog) {
-            FirstDayOfWeekDialog(
-                current = firstDayOfWeek,
-                onDismiss = { showFirstDayDialog = false },
-                onSelect = { day ->
-                    onFirstDayOfWeekChange(day)
-                    showFirstDayDialog = false
-                }
-            )
-        }
-
-        Spacer(Modifier.height(20.dp))
-
-        Text("PDF READER", color = TextGray, fontSize = 13.sp, fontWeight = FontWeight.Bold)
-        Spacer(Modifier.height(8.dp))
-        SettingsCard {
-            SettingsRow(
-                title = "Default sort order",
-                trailingText = defaultSortOption.label,
-                onClick = { showSortDialog = true }
-            )
-            HorizontalDivider(color = Color(0xFF3A3B44))
-            SettingsRow(
-                title = "Open PDFs with",
-                trailingText = preferredAppLabel ?: "Select app",
-                onClick = { showOpenWithDialog = true }
-            )
-            HorizontalDivider(color = Color(0xFF3A3B44))
-            SettingsRow(
-                title = "Auto-scan for new PDFs",
-                trailingText = if (autoScanEnabled) "On" else "Off",
-                onClick = { onAutoScanEnabledChange(!autoScanEnabled) }
-            )
-            HorizontalDivider(color = Color(0xFF3A3B44))
-            SettingsRow(title = "Clear thumbnail cache", onClick = { showClearCacheConfirm = true })
-            HorizontalDivider(color = Color(0xFF3A3B44))
-            SettingsRow(
-                title = "Show file size in",
-                trailingText = when (fileSizeUnit) {
-                    FileSizeUnit.AUTO -> "Auto (MB/KB)"
-                    FileSizeUnit.KB -> "Always KB"
-                    FileSizeUnit.MB -> "Always MB"
-                },
-                onClick = { showFileSizeDialog = true }
-            )
-        }
-
-        if (showSortDialog) {
-            SingleChoiceDialog(
-                title = "Default sort order",
-                options = PdfSortOption.values().toList(),
-                optionLabel = { it.label },
-                current = defaultSortOption,
-                onDismiss = { showSortDialog = false },
-                onSelect = {
-                    onDefaultSortOptionChange(it)
-                    showSortDialog = false
-                }
-            )
-        }
-
-        if (showOpenWithDialog) {
-            OpenWithDialog(
-                apps = remember { getPdfHandlerApps(context) },
-                current = preferredPdfPackage,
-                onDismiss = { showOpenWithDialog = false },
-                onSelect = {
-                    onPreferredPdfPackageChange(it)
-                    showOpenWithDialog = false
-                }
-            )
-        }
-
-        if (showFileSizeDialog) {
-            SingleChoiceDialog(
-                title = "Show file size in",
-                options = FileSizeUnit.values().toList(),
-                optionLabel = {
-                    when (it) {
-                        FileSizeUnit.AUTO -> "Auto (MB/KB)"
-                        FileSizeUnit.KB -> "Always KB"
-                        FileSizeUnit.MB -> "Always MB"
-                    }
-                },
-                current = fileSizeUnit,
-                onDismiss = { showFileSizeDialog = false },
-                onSelect = {
-                    onFileSizeUnitChange(it)
-                    showFileSizeDialog = false
-                }
-            )
-        }
-
-        if (showClearCacheConfirm) {
-            AlertDialog(
-                onDismissRequest = { showClearCacheConfirm = false },
-                title = { Text("Clear thumbnail cache?") },
-                text = { Text("PDF thumbnails will be re-generated the next time you open each file.") },
-                confirmButton = {
-                    TextButton(onClick = {
-                        PdfThumbnailCache.clear()
-                        coroutineScope.launch { PdfThumbnailDiskCache.clear(context) }
-                        showClearCacheConfirm = false
-                        showCacheClearedBanner = true
-                    }) {
-                        Text("Clear", color = Color(0xFFE05260), fontWeight = FontWeight.Bold)
-                    }
-                },
-                dismissButton = {
-                    TextButton(onClick = { showClearCacheConfirm = false }) { Text("Cancel") }
-                },
-                containerColor = CardBg,
-                titleContentColor = Color.White,
-                textContentColor = TextGray
-            )
-        }
-
-        Spacer(Modifier.height(20.dp))
-
-        Text("SECURITY", color = TextGray, fontSize = 13.sp, fontWeight = FontWeight.Bold)
-        Spacer(Modifier.height(8.dp))
-        SettingsCard {
-            SettingsRow(
-                title = "App lock (Fingerprint)",
-                trailingText = if (appLockEnabled) "On" else "Off",
-                onClick = {
-                    if (!appLockEnabled) {
-                        val biometricManager = BiometricManager.from(context)
-                        if (biometricManager.canAuthenticate(BiometricManager.Authenticators.BIOMETRIC_STRONG) == BiometricManager.BIOMETRIC_SUCCESS) {
-                            onAppLockEnabledChange(true)
-                        } else {
-                            Toast.makeText(context, "Set up fingerprint unlock in your phone's settings first", Toast.LENGTH_LONG).show()
-                        }
-                    } else {
-                        onAppLockEnabledChange(false)
-                    }
-                }
-            )
-            if (appLockEnabled) {
-                HorizontalDivider(color = Color(0xFF3A3B44))
-                SettingsRow(
-                    title = "Auto-lock",
-                    trailingText = autoLockTimeout.label,
-                    onClick = { showAutoLockDialog = true }
-                )
-            }
-        }
-
-        if (showAutoLockDialog) {
-            AutoLockTimeoutSheet(
-                current = autoLockTimeout,
-                onDismiss = { showAutoLockDialog = false },
-                onSelect = {
-                    onAutoLockTimeoutChange(it)
-                    showAutoLockDialog = false
-                }
-            )
-        }
-
-        Spacer(Modifier.height(20.dp + bottomContentPadding))
-    }
-}
-
 fun effectivePeriod(habit: Habit): DoItAt {
     val hour = habit.startTime?.hour
     return when {
@@ -4167,28 +2411,6 @@ fun calculateDayProgress(
 fun weekStartFor(date: LocalDate, firstDay: DayOfWeek): LocalDate {
     val diff = (date.dayOfWeek.value - firstDay.value + 7) % 7
     return date.minusDays(diff.toLong())
-}
-
-fun computeStreak(
-    habit: Habit,
-    habitStatus: Map<Pair<Long, LocalDate>, HabitStatus>,
-    today: LocalDate
-): Int {
-    var streak = 0
-    val todayStatus = habitStatus[habit.id to today] ?: HabitStatus.ACTIVE
-    var date = if (todayStatus == HabitStatus.DONE || todayStatus == HabitStatus.SKIPPED) today else today.minusDays(1)
-    while (!date.isBefore(habit.createdAt)) {
-        if (date.dayOfWeek in habit.habitDays) {
-            val status = habitStatus[habit.id to date] ?: HabitStatus.ACTIVE
-            if (status == HabitStatus.DONE || status == HabitStatus.SKIPPED) {
-                streak++
-            } else {
-                break
-            }
-        }
-        date = date.minusDays(1)
-    }
-    return streak
 }
 
 @OptIn(ExperimentalFoundationApi::class)
@@ -4433,7 +2655,7 @@ fun TasksScreen(
                 onMonthSelected = { month ->
                     val firstOfMonth = LocalDate.of(today.year, month, 1)
                     val targetMonday = weekStartFor(firstOfMonth, firstDayOfWeek)
-                    val weeksBetween = java.time.temporal.ChronoUnit.WEEKS.between(currentWeekMonday, targetMonday)
+                    val weeksBetween = ChronoUnit.WEEKS.between(currentWeekMonday, targetMonday)
                     coroutineScope.launch {
                         pagerState.scrollToPage((centerPage + weeksBetween).toInt())
                     }
@@ -4884,8 +3106,8 @@ fun CoachMarkOverlay(
     onNext: () -> Unit
 ) {
     val density = LocalDensity.current
-    val configuration = LocalConfiguration.current
-    val screenHeightPx = with(density) { configuration.screenHeightDp.dp.toPx() }
+    val windowInfo = LocalWindowInfo.current
+    val screenHeightPx = windowInfo.containerSize.height.toFloat()
 
     val centerX = targetRect.center.x
     val centerY = targetRect.center.y
@@ -4986,7 +3208,7 @@ fun CoachMarkOverlay(
 
                 val arrowPath = Path().apply {
                     moveTo(start.x, start.y)
-                    quadraticBezierTo(control.x, control.y, end.x, end.y)
+                    quadraticTo(control.x, control.y, end.x, end.y)
                 }
                 drawPath(
                     path = arrowPath,
@@ -5104,32 +3326,6 @@ fun FilterChip(label: String, selected: Boolean, icon: androidx.compose.ui.graph
         }
     }
 }
-@Composable
-fun MonthPickerDialog(year: Int, onDismiss: () -> Unit, onMonthSelected: (Int) -> Unit) {
-    val months = listOf(
-        "January", "February", "March", "April", "May", "June",
-        "July", "August", "September", "October", "November", "December"
-    )
-    Dialog(onDismissRequest = onDismiss) {
-        Surface(shape = RoundedCornerShape(16.dp), color = CardBg) {
-            Column(modifier = Modifier.padding(20.dp)) {
-                Text("$year", color = Color.White, fontSize = 18.sp, fontWeight = FontWeight.Bold)
-                Spacer(Modifier.height(12.dp))
-                months.forEachIndexed { index, monthName ->
-                    Text(
-                        monthName,
-                        color = Color.White,
-                        fontSize = 16.sp,
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .clickable { onMonthSelected(index + 1) }
-                            .padding(vertical = 12.dp)
-                    )
-                }
-            }
-        }
-    }
-}
 
 data class PdfFile(
     val id: Long,
@@ -5180,15 +3376,6 @@ suspend fun loadDevicePdfs(context: Context): List<PdfFile> = withContext(Dispat
         }
     }
     result
-}
-
-enum class FileSizeUnit { AUTO, KB, MB }
-
-enum class AutoLockTimeout(val label: String, val millis: Long) {
-    INSTANT("Instant", 0L),
-    ONE_MIN("After 1 min", 60_000L),
-    FIVE_MIN("After 5 mins", 5 * 60_000L),
-    TEN_MIN("After 10 mins", 10 * 60_000L)
 }
 
 fun formatFileSize(bytes: Long, unit: FileSizeUnit = FileSizeUnit.AUTO): String {
@@ -5513,56 +3700,6 @@ object PdfThumbnailCache {
     }
 }
 
-object PdfThumbnailDiskCache {
-    private fun dir(context: Context): File {
-        val d = File(context.cacheDir, "pdf_thumbs")
-        if (!d.exists()) d.mkdirs()
-        return d
-    }
-
-    suspend fun get(context: Context, pdfId: Long): Bitmap? = withContext(Dispatchers.IO) {
-        val file = File(dir(context), "$pdfId.jpg")
-        if (!file.exists()) return@withContext null
-        try {
-            android.graphics.BitmapFactory.decodeFile(file.absolutePath)
-        } catch (e: kotlinx.coroutines.CancellationException) {
-            throw e
-        } catch (e: Exception) {
-            null
-        }
-    }
-
-    fun getSync(context: Context, pdfId: Long): Bitmap? {
-        val file = File(dir(context), "$pdfId.jpg")
-        if (!file.exists()) return null
-        return try {
-            android.graphics.BitmapFactory.decodeFile(file.absolutePath)
-        } catch (e: Exception) {
-            null
-        }
-    }
-
-    suspend fun put(context: Context, pdfId: Long, bitmap: Bitmap): Unit = withContext(Dispatchers.IO) {
-        try {
-            java.io.FileOutputStream(File(dir(context), "$pdfId.jpg")).use { out ->
-                bitmap.compress(Bitmap.CompressFormat.JPEG, 85, out)
-            }
-        } catch (e: kotlinx.coroutines.CancellationException) {
-            throw e
-        } catch (e: Exception) {
-
-        }
-    }
-
-    suspend fun clear(context: Context): Unit = withContext(Dispatchers.IO) {
-        try {
-            dir(context).listFiles()?.forEach { it.delete() }
-        } catch (e: Exception) {
-
-        }
-    }
-}
-
 object PdfsScreenState {
     val pdfs = mutableStateOf<List<PdfFile>>(emptyList())
     val folders = mutableStateOf<Set<String>>(emptySet())
@@ -5766,9 +3903,15 @@ fun PdfsScreen(
                 )
                 Spacer(Modifier.width(12.dp))
                 val searchInteractionSource = remember { MutableInteractionSource() }
+                var searchFieldValue by remember { mutableStateOf(TextFieldValue(searchQuery, TextRange(searchQuery.length))) }
+                LaunchedEffect(searchQuery) {
+                    if (searchQuery != searchFieldValue.text) {
+                        searchFieldValue = TextFieldValue(searchQuery, TextRange(searchQuery.length))
+                    }
+                }
                 BasicTextField(
-                    value = searchQuery,
-                    onValueChange = { searchQuery = it },
+                    value = searchFieldValue,
+                    onValueChange = { searchFieldValue = it; searchQuery = it.text },
                     modifier = Modifier
                         .weight(1f)
                         .focusRequester(searchFocusRequester),
@@ -6594,130 +4737,6 @@ fun PdfSheetQuickAction(
     }
 }
 
-@Composable
-fun PdfRow(
-    pdf: PdfFile,
-    selectionMode: Boolean,
-    selected: Boolean,
-    fileSizeUnit: FileSizeUnit = FileSizeUnit.AUTO,
-    onClick: () -> Unit,
-    onLongPress: () -> Unit,
-    onDelete: () -> Unit,
-    onShare: () -> Unit,
-    onRename: () -> Unit,
-    onPrint: () -> Unit,
-    onMove: () -> Unit
-) {
-        var showOptionsSheet by remember { mutableStateOf(false) }
-
-    val context = LocalContext.current
-    var thumbnail by remember(pdf.id) {
-        mutableStateOf(PdfThumbnailCache.get(pdf.id))
-    }
-
-    LaunchedEffect(pdf.id) {
-        if (thumbnail != null) return@LaunchedEffect
-        val fromDisk = PdfThumbnailDiskCache.get(context, pdf.id)
-        if (fromDisk != null) {
-            PdfThumbnailCache.put(pdf.id, fromDisk)
-            thumbnail = fromDisk
-            return@LaunchedEffect
-        }
-        pdfRenderSemaphore.acquire()
-        val bmp = try {
-            renderPdfThumbnail(pdf.path)
-        } finally {
-            pdfRenderSemaphore.release()
-        }
-        if (bmp != null) {
-            PdfThumbnailCache.put(pdf.id, bmp)
-            PdfThumbnailDiskCache.put(context, pdf.id, bmp)
-        }
-        thumbnail = bmp
-    }
-
-    Row(
-        modifier = Modifier
-            .fillMaxWidth()
-            .clip(RoundedCornerShape(14.dp))
-            .background(CardBg)
-            .combinedClickable(
-                onClick = onClick,
-                onLongClick = onLongPress
-            )
-            .padding(horizontal = 16.dp, vertical = 14.dp),
-        verticalAlignment = Alignment.CenterVertically
-    ) {
-        if (selectionMode) {
-            Icon(
-                if (selected) Icons.Default.CheckBox else Icons.Default.CheckBoxOutlineBlank,
-                contentDescription = null,
-                tint = if (selected) BlueAccent else TextGray,
-                modifier = Modifier.padding(end = 10.dp)
-            )
-        }
-        Box(
-            modifier = Modifier
-                .width(44.dp)
-                .height(62.dp)
-                .clip(RoundedCornerShape(6.dp))
-                .background(if (thumbnail != null) Color.White else Color(0xFFB3261E)),
-            contentAlignment = Alignment.Center
-        ) {
-            val bmp = thumbnail
-            if (bmp != null) {
-                Image(
-                    bitmap = bmp.asImageBitmap(),
-                    contentDescription = null,
-                    contentScale = ContentScale.Crop,
-                    modifier = Modifier
-                        .fillMaxSize()
-                        .clip(RoundedCornerShape(6.dp))
-                )
-            } else {
-                Text("PDF", color = Color.White, fontSize = 11.sp, fontWeight = FontWeight.Bold)
-            }
-        }
-        Spacer(Modifier.width(14.dp))
-        Column(modifier = Modifier.weight(1f)) {
-            Text(pdf.name, color = Color.White, fontSize = 13.sp, fontWeight = FontWeight.Medium, maxLines = 2)
-            Spacer(Modifier.height(4.dp))
-                 val dateAndSizeText = remember(pdf.dateModified, pdf.sizeBytes, fileSizeUnit) {
-                "${formatPdfDate(pdf.dateModified)}  •  ${formatFileSize(pdf.sizeBytes, fileSizeUnit)}"
-            }
-            Text(
-                dateAndSizeText,
-                color = TextGray,
-                fontSize = 12.sp,
-                maxLines = 1
-            )
-        }
-
-        if (!selectionMode) {
-            Spacer(Modifier.width(6.dp))
-            Icon(
-                Icons.Default.MoreVert,
-                contentDescription = "More options",
-                tint = TextGray,
-                modifier = Modifier.clickable { showOptionsSheet = true }
-            )
-        }
-    }
-
-    if (showOptionsSheet) {
-        PdfOptionsSheet(
-            pdf = pdf,
-            thumbnail = thumbnail,
-            onDismiss = { showOptionsSheet = false },
-            onDelete = onDelete,
-            onShare = onShare,
-            onRename = onRename,
-            onPrint = onPrint,
-            onMove = onMove
-        )
-    }
-}
-
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun AddHabitScreen(existingHabit: Habit?, onBack: () -> Unit, onSave: (Habit) -> Unit, onDelete: () -> Unit, initialStartDate: LocalDate = LocalDate.now()) {
@@ -7379,149 +5398,4 @@ fun HabitDaysCard(
             }
         }
     }
-}
-@OptIn(ExperimentalFoundationApi::class)
-@Composable
-fun DaysWheelPickerSheet(
-    currentValue: Int,
-    range: IntRange,
-    onDismiss: () -> Unit,
-    onSave: (Int) -> Unit
-) {
-    val items = range.toList()
-    val itemHeight = 40.dp
-    val visibleCount = 5
-    val startIndex = items.indexOf(currentValue).coerceAtLeast(0)
-    val listState = rememberLazyListState(initialFirstVisibleItemIndex = startIndex)
-    val snapFlingBehavior = rememberSnapFlingBehavior(
-        SnapLayoutInfoProvider(listState, SnapPosition.Center)
-    )
-    val centeredIndex by remember {
-        derivedStateOf {
-            val layoutInfo = listState.layoutInfo
-            val viewportCenter = (layoutInfo.viewportStartOffset + layoutInfo.viewportEndOffset) / 2
-            layoutInfo.visibleItemsInfo
-                .minByOrNull { kotlin.math.abs((it.offset + it.size / 2) - viewportCenter) }
-                ?.index ?: startIndex
-        }
-    }
-    val selected = items.getOrElse(centeredIndex) { currentValue }
-
-    Dialog(
-        onDismissRequest = onDismiss,
-        properties = DialogProperties(usePlatformDefaultWidth = false)
-    ) {
-        Box(
-            modifier = Modifier
-                .fillMaxSize()
-                .background(Color.Black.copy(alpha = 0.5f))
-                .clickable(
-                    indication = null,
-                    interactionSource = remember { MutableInteractionSource() }
-                ) { onDismiss() },
-            contentAlignment = Alignment.BottomCenter
-        ) {
-            Surface(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .clickable(
-                        indication = null,
-                        interactionSource = remember { MutableInteractionSource() }
-                    ) {  },
-                shape = RoundedCornerShape(topStart = 20.dp, topEnd = 20.dp),
-                color = Color(0xFF2A2B33)
-            ) {
-            Column(modifier = Modifier.fillMaxWidth()) {
-                Row(
-                    modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 10.dp),
-                    horizontalArrangement = Arrangement.SpaceBetween,
-                    verticalAlignment = Alignment.CenterVertically
-                ) {
-                    Icon(
-                        Icons.Default.Close,
-                        contentDescription = null,
-                        tint = Color.White,
-                        modifier = Modifier.clickable { onDismiss() }
-                    )
-                }
-                Text(
-                    "Days",
-                    color = Color.White,
-                    fontWeight = FontWeight.Bold,
-                    fontSize = 18.sp,
-                    modifier = Modifier.padding(horizontal = 16.dp)
-                )
-                Spacer(Modifier.height(4.dp))
-                Box(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .height(itemHeight * visibleCount),
-                    contentAlignment = Alignment.Center
-                ) {
-
-                    HorizontalDivider(
-                        color = BlueAccent.copy(alpha = 0.5f),
-                        modifier = Modifier
-                            .align(Alignment.TopCenter)
-                            .width(90.dp)
-                            .offset(y = itemHeight * 2)
-                    )
-                    HorizontalDivider(
-                        color = BlueAccent.copy(alpha = 0.5f),
-                        modifier = Modifier
-                            .align(Alignment.TopCenter)
-                            .width(90.dp)
-                            .offset(y = itemHeight * 3)
-                    )
-                    LazyColumn(
-                        state = listState,
-                        flingBehavior = snapFlingBehavior,
-                        contentPadding = PaddingValues(vertical = itemHeight * 2),
-                        modifier = Modifier.fillMaxWidth()
-                    ) {
-                        items(items.size) { idx ->
-                            val value = items[idx]
-                            val isCenter = value == selected
-                            Box(
-                                modifier = Modifier.fillMaxWidth().height(itemHeight),
-                                contentAlignment = Alignment.Center
-                            ) {
-                                Text(
-                                    "$value",
-                                    color = if (isCenter) Color.White else TextGray,
-                                    fontWeight = if (isCenter) FontWeight.Bold else FontWeight.Normal,
-                                    fontSize = if (isCenter) 18.sp else 14.sp
-                                )
-                            }
-                        }
-                    }
-                }
-                Spacer(Modifier.height(8.dp))
-                Row(
-                    modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 8.dp),
-                    horizontalArrangement = Arrangement.spacedBy(10.dp)
-                ) {
-                    Box(
-                        modifier = Modifier
-                            .weight(1f)
-                            .height(46.dp)
-                            .clip(RoundedCornerShape(50))
-                            .background(Color(0xFF3A3B44))
-                            .clickable { onDismiss() },
-                        contentAlignment = Alignment.Center
-                    ) { Text("BACK", color = Color.White, fontWeight = FontWeight.Bold) }
-                    Box(
-                        modifier = Modifier
-                            .weight(1f)
-                            .height(52.dp)
-                            .clip(RoundedCornerShape(50))
-                            .background(BlueAccent)
-                            .clickable { onSave(selected) },
-                        contentAlignment = Alignment.Center
-                    ) { Text("SAVE", color = Color.White, fontWeight = FontWeight.Bold) }
-                }
-            }
-        }
-    }
-}
 }

@@ -55,9 +55,6 @@
             android:name=".HabitReminderReceiver"
             android:exported="false" />
         <receiver
-    android:name=".TodoReminderReceiver"
-    android:exported="false" />
-        <receiver
             android:name=".BootReceiver"
             android:exported="true">
             <intent-filter>
