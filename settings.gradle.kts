@@ -24,4 +24,4 @@ dependencyResolutionManagement {
 
 rootProject.name = "STREAKK"
 include(":app")
- 
+include(":baselineprofile")

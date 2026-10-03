@@ -8,6 +8,7 @@ import androidx.activity.compose.setContent
 import android.widget.Toast
 import androidx.lifecycle.compose.LocalLifecycleOwner
 import androidx.lifecycle.Lifecycle
+import androidx.lifecycle.lifecycleScope
 import androidx.lifecycle.LifecycleEventObserver
 import androidx.activity.compose.BackHandler
 import androidx.activity.compose.PredictiveBackHandler
@@ -83,10 +84,13 @@ import androidx.compose.material.icons.filled.WbSunny
 import androidx.compose.material.icons.filled.WbTwilight
 import androidx.compose.material.icons.filled.LightMode
 import androidx.compose.material.icons.filled.NightsStay
+import androidx.compose.material.icons.filled.Repeat
+import androidx.compose.material.icons.filled.LocalFireDepartment
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.zIndex
 import androidx.compose.ui.draw.alpha
 import androidx.compose.ui.draw.scale
 import androidx.compose.ui.draw.clip
@@ -97,13 +101,19 @@ import androidx.compose.ui.text.font.Font
 import androidx.compose.ui.text.input.TextFieldValue
 import androidx.compose.ui.text.TextRange
 import androidx.compose.ui.text.font.FontFamily
+import androidx.compose.ui.text.style.TextDecoration
 import androidx.compose.ui.text.font.FontStyle
 import androidx.compose.animation.Crossfade
 import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.core.MutableTransitionState
 import androidx.compose.animation.core.tween
 import androidx.compose.animation.core.FastOutSlowInEasing
+import androidx.compose.animation.core.FastOutLinearInEasing
+import androidx.compose.ui.draw.drawBehind
+import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.animation.core.animateFloatAsState
+import androidx.compose.animation.animateColorAsState
+import kotlin.random.Random
 import androidx.compose.animation.core.Animatable
 import androidx.compose.animation.core.spring
 import androidx.compose.animation.core.Spring
@@ -165,6 +175,8 @@ import org.json.JSONArray
 import org.json.JSONObject
 import androidx.compose.runtime.snapshots.SnapshotStateMap
 import androidx.compose.runtime.snapshots.SnapshotStateList
+import androidx.compose.runtime.saveable.rememberSaveable
+import androidx.compose.runtime.saveable.rememberSaveableStateHolder
 import androidx.compose.foundation.combinedClickable
 import androidx.compose.foundation.layout.imePadding
 import androidx.compose.foundation.layout.ExperimentalLayoutApi
@@ -233,6 +245,7 @@ import androidx.compose.foundation.Canvas
 import androidx.compose.ui.graphics.StrokeCap
 import androidx.compose.ui.graphics.Path
 import androidx.compose.ui.graphics.drawscope.Stroke
+import androidx.compose.ui.graphics.drawscope.rotate
 import androidx.compose.material.icons.filled.CreateNewFolder
 import androidx.compose.material.icons.automirrored.filled.Sort
 import androidx.compose.material.icons.filled.Folder
@@ -291,7 +304,7 @@ val Baloo2Typography = Typography(
     labelSmall = defaultTypography.labelSmall.copy(fontFamily = Poppins)
 )
 
-enum class Screen { TASKS, PDFS, SETTINGS }
+enum class Screen { HOME, TASKS, PDFS, SETTINGS }
 
 enum class HabitStatus { ACTIVE, DONE, SKIPPED }
 
@@ -578,6 +591,44 @@ object HabitStorage {
     }
 }
 
+object TodoStorage {
+    private const val PREFS_NAME = "todo_prefs"
+    private const val KEY_TODOS = "todos_json"
+
+    fun save(context: Context, todos: List<HomeTodoItem>) {
+        val array = JSONArray()
+        todos.forEach { todo ->
+            val obj = JSONObject()
+            obj.put("id", todo.id)
+            obj.put("text", todo.text)
+            obj.put("date", todo.date.toString())
+            obj.put("reminderTime", todo.reminderTime?.toString() ?: JSONObject.NULL)
+            obj.put("completed", todo.completed)
+            array.put(obj)
+        }
+        context.getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE)
+            .edit()
+            .putString(KEY_TODOS, array.toString())
+            .apply()
+    }
+
+    fun load(context: Context): List<HomeTodoItem> {
+        val json = context.getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE)
+            .getString(KEY_TODOS, null) ?: return emptyList()
+        val array = JSONArray(json)
+        return (0 until array.length()).map { i ->
+            val obj = array.getJSONObject(i)
+            HomeTodoItem(
+                id = obj.getLong("id"),
+                text = obj.getString("text"),
+                date = LocalDate.parse(obj.getString("date")),
+                reminderTime = if (obj.isNull("reminderTime")) null else LocalTime.parse(obj.getString("reminderTime")),
+                completed = obj.getBoolean("completed")
+            )
+        }
+    }
+}
+
 object HabitReminderScheduler {
     private const val CHANNEL_ID = "habit_reminders"
 
@@ -751,8 +802,117 @@ object HabitReminderScheduler {
     }
 }
 
+object TodoReminderScheduler {
+    private const val CHANNEL_ID = "todo_reminders"
+
+    fun createNotificationChannel(context: Context) {
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
+            val channel = NotificationChannel(
+                CHANNEL_ID,
+                "Task reminders",
+                NotificationManager.IMPORTANCE_HIGH
+            ).apply {
+                description = "Reminders for your to-do tasks"
+            }
+            val manager = context.getSystemService(Context.NOTIFICATION_SERVICE) as NotificationManager
+            manager.createNotificationChannel(channel)
+        }
+    }
+
+    private fun alarmIntent(context: Context, todoId: Long): Intent =
+        Intent(context, HabitReminderReceiver::class.java).apply {
+            action = "todo_reminder_$todoId"
+        }
+
+    fun schedule(context: Context, todo: HomeTodoItem) {
+        cancel(context, todo.id)
+        val time = todo.reminderTime ?: return
+        if (todo.completed) return
+        val triggerDateTime = todo.date.atTime(time)
+        if (!triggerDateTime.isAfter(LocalDateTime.now())) return
+        val triggerAt = triggerDateTime.atZone(ZoneId.systemDefault()).toInstant().toEpochMilli()
+
+        val intent = alarmIntent(context, todo.id).apply {
+            putExtra("isTodo", true)
+            putExtra("todoId", todo.id)
+            putExtra("todoText", todo.text)
+        }
+        val pendingIntent = PendingIntent.getBroadcast(
+            context,
+            todo.id.toInt(),
+            intent,
+            PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE
+        )
+        val alarmManager = context.getSystemService(Context.ALARM_SERVICE) as AlarmManager
+        try {
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S && !alarmManager.canScheduleExactAlarms()) {
+                alarmManager.setAndAllowWhileIdle(AlarmManager.RTC_WAKEUP, triggerAt, pendingIntent)
+            } else {
+                alarmManager.setExactAndAllowWhileIdle(AlarmManager.RTC_WAKEUP, triggerAt, pendingIntent)
+            }
+        } catch (e: SecurityException) {
+            alarmManager.setAndAllowWhileIdle(AlarmManager.RTC_WAKEUP, triggerAt, pendingIntent)
+        }
+    }
+
+    fun cancel(context: Context, todoId: Long) {
+        val pendingIntent = PendingIntent.getBroadcast(
+            context,
+            todoId.toInt(),
+            alarmIntent(context, todoId),
+            PendingIntent.FLAG_NO_CREATE or PendingIntent.FLAG_IMMUTABLE
+        ) ?: return
+        val alarmManager = context.getSystemService(Context.ALARM_SERVICE) as AlarmManager
+        alarmManager.cancel(pendingIntent)
+        pendingIntent.cancel()
+    }
+
+    fun rescheduleAll(context: Context) {
+        TodoStorage.load(context).forEach { schedule(context, it) }
+    }
+
+    fun showNotification(context: Context, todoId: Long, text: String) {
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU &&
+            context.checkSelfPermission(Manifest.permission.POST_NOTIFICATIONS) != PackageManager.PERMISSION_GRANTED
+        ) {
+            return
+        }
+        val openIntent = Intent(context, MainActivity::class.java).apply {
+            flags = Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_CLEAR_TOP
+        }
+        val contentPendingIntent = PendingIntent.getActivity(
+            context,
+            todoId.toInt(),
+            openIntent,
+            PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE
+        )
+        val largeIcon = ContextCompat.getDrawable(context, R.mipmap.ic_launcher)?.toBitmap()
+        val notification = NotificationCompat.Builder(context, CHANNEL_ID)
+            .setSmallIcon(R.drawable.ic_launcher_foreground)
+            .setColor(android.graphics.Color.parseColor("#3B7BF5"))
+            .setLargeIcon(largeIcon)
+            .setContentTitle("Task reminder")
+            .setContentText(text)
+            .setStyle(NotificationCompat.BigTextStyle().bigText(text))
+            .setPriority(NotificationCompat.PRIORITY_HIGH)
+            .setCategory(NotificationCompat.CATEGORY_REMINDER)
+            .setAutoCancel(true)
+            .setContentIntent(contentPendingIntent)
+            .build()
+        NotificationManagerCompat.from(context).notify(todoId.toInt(), notification)
+    }
+}
+
 class HabitReminderReceiver : BroadcastReceiver() {
     override fun onReceive(context: Context, intent: Intent) {
+        if (intent.getBooleanExtra("isTodo", false)) {
+            val todoId = intent.getLongExtra("todoId", -1L)
+            val todoText = intent.getStringExtra("todoText") ?: return
+            if (todoId == -1L) return
+            TodoReminderScheduler.createNotificationChannel(context)
+            TodoReminderScheduler.showNotification(context, todoId, todoText)
+            return
+        }
         val habitId = intent.getLongExtra("habitId", -1L)
         if (intent.getBooleanExtra("snoozeOnly", false)) {
             val habitName = intent.getStringExtra("habitName") ?: return
@@ -904,6 +1064,7 @@ class BootReceiver : BroadcastReceiver() {
     override fun onReceive(context: Context, intent: Intent) {
         if (intent.action == Intent.ACTION_BOOT_COMPLETED) {
             HabitReminderScheduler.rescheduleAll(context)
+            TodoReminderScheduler.rescheduleAll(context)
         }
     }
 }
@@ -1072,35 +1233,44 @@ object SettingsStorage {
             .apply()
     }
 }
+object StartupPreload {
+    @Volatile var habits: List<Habit>? = null
+    @Volatile var habitStatus: Map<Pair<Long, LocalDate>, HabitStatus>? = null
+    @Volatile var todos: List<HomeTodoItem>? = null
+
+    fun run(context: Context) {
+        habits = runCatching { HabitStorage.load(context) }.getOrNull()
+        habitStatus = runCatching { HabitStorage.loadStatus(context) }.getOrNull()
+        todos = runCatching { TodoStorage.load(context) }.getOrNull()
+    }
+}
+
 class MainActivity : FragmentActivity() {
+    private var startupReady = false
+
     @OptIn(ExperimentalAnimationApi::class)
     override fun onCreate(savedInstanceState: Bundle?) {
-        installSplashScreen()
+        val splashScreen = installSplashScreen()
+        splashScreen.setKeepOnScreenCondition { !startupReady }
+        splashScreen.setOnExitAnimationListener { splashScreenView ->
+            splashScreenView.view.animate()
+                .alpha(0f)
+                .setDuration(300)
+                .withEndAction { splashScreenView.remove() }
+                .start()
+        }
         super.onCreate(savedInstanceState)
         WindowCompat.setDecorFitsSystemWindows(window, false)
         window.setBackgroundDrawable(android.graphics.drawable.ColorDrawable(0xFF121218.toInt()))
         HabitReminderScheduler.createNotificationChannel(this)
-        setContent {
-            MaterialTheme(colorScheme = darkColorScheme(background = DarkBg), typography = Baloo2Typography) {
-                var showSplash by remember { mutableStateOf(true) }
-                LaunchedEffect(Unit) {
-                    delay(900)
-                    showSplash = false
-                }
-                AnimatedContent(
-                    targetState = showSplash,
-                    transitionSpec = {
-                        fadeIn(animationSpec = tween(400)) togetherWith fadeOut(animationSpec = tween(400))
-                    },
-                    label = "splashToHomeTransition"
-                ) { isSplash ->
-                    if (isSplash) {
-                        AppSplashScreen()
-                    } else {
-                        AppRoot()
-                    }
+        lifecycleScope.launch {
+            withContext(Dispatchers.IO) { StartupPreload.run(applicationContext) }
+            setContent {
+                MaterialTheme(colorScheme = darkColorScheme(background = DarkBg), typography = Baloo2Typography) {
+                    AppRoot()
                 }
             }
+            startupReady = true
         }
     }
 }
@@ -1136,7 +1306,7 @@ fun AppRoot() {
         } else {
             checkAndShowPermissionDialog()
         }
-        HabitReminderScheduler.rescheduleAll(context)
+        withContext(Dispatchers.Default) { HabitReminderScheduler.rescheduleAll(context) }
     }
 
     LaunchedEffect(pendingPermissionAction) {
@@ -1250,19 +1420,25 @@ fun AppRoot() {
         )
     }
 
-    var currentScreen by remember { mutableStateOf(Screen.TASKS) }
+    var currentScreen by remember { mutableStateOf(Screen.HOME) }
     var showAddHabit by remember { mutableStateOf(false) }
-    BackHandler(enabled = !showAddHabit && currentScreen != Screen.TASKS) {
-        currentScreen = Screen.TASKS
+    BackHandler(enabled = !showAddHabit && (currentScreen == Screen.TASKS || currentScreen == Screen.SETTINGS)) {
+        currentScreen = Screen.HOME
     }
     var editingHabit by remember { mutableStateOf<Habit?>(null) }
+    var newHabitStartDate by remember { mutableStateOf(LocalDate.now()) }
     var showDeletedBanner by remember { mutableStateOf(false) }
     var showHabitLimitBanner by remember { mutableStateOf(false) }
+    var showTodoDeletedBanner by remember { mutableStateOf(false) }
+    var showDeleteAllBanner by remember { mutableStateOf(false) }
         val habits = remember {
-        mutableStateListOf<Habit>().apply { addAll(HabitStorage.load(context)) }
+        mutableStateListOf<Habit>().apply { addAll(StartupPreload.habits ?: HabitStorage.load(context)) }
     }
     val habitStatus = remember {
-        mutableStateMapOf<Pair<Long, LocalDate>, HabitStatus>().apply { putAll(HabitStorage.loadStatus(context)) }
+        mutableStateMapOf<Pair<Long, LocalDate>, HabitStatus>().apply { putAll(StartupPreload.habitStatus ?: HabitStorage.loadStatus(context)) }
+    }
+    val todos = remember {
+        mutableStateListOf<HomeTodoItem>().apply { addAll(StartupPreload.todos ?: TodoStorage.load(context)) }
     }
     var firstDayOfWeek by remember { mutableStateOf(SettingsStorage.loadFirstDayOfWeek(context)) }
     var showStreakCount by remember { mutableStateOf(SettingsStorage.loadShowStreakCount(context)) }
@@ -1277,12 +1453,43 @@ fun AppRoot() {
     var lastBackgroundedAt by remember { mutableStateOf(0L) }
     val lifecycleOwner = LocalLifecycleOwner.current
 
-    LaunchedEffect(habits.toList()) {
-        HabitStorage.save(context, habits)
+    val previousTodos = remember { java.util.concurrent.ConcurrentHashMap<Long, HomeTodoItem>() }
+
+    fun persistTodos(snapshot: List<HomeTodoItem>) {
+        TodoStorage.save(context, snapshot)
+        val currentIds = snapshot.map { it.id }.toSet()
+        previousTodos.keys.filter { it !in currentIds }.forEach {
+            TodoReminderScheduler.cancel(context, it)
+            previousTodos.remove(it)
+        }
+        snapshot.forEach { todo ->
+            val prev = previousTodos[todo.id]
+            if (prev != todo && (todo.reminderTime != null || prev?.reminderTime != null)) {
+                TodoReminderScheduler.schedule(context, todo)
+            }
+            previousTodos[todo.id] = todo
+        }
     }
 
-    LaunchedEffect(habitStatus.toMap()) {
-        HabitStorage.saveStatus(context, habitStatus)
+    LaunchedEffect(Unit) {
+        snapshotFlow { habits.toList() }.collectLatest { snapshot ->
+            delay(300)
+            withContext(Dispatchers.IO) { HabitStorage.save(context, snapshot) }
+        }
+    }
+
+    LaunchedEffect(Unit) {
+        snapshotFlow { todos.toList() }.collectLatest { snapshot ->
+            delay(300)
+            withContext(Dispatchers.IO) { persistTodos(snapshot) }
+        }
+    }
+
+    LaunchedEffect(Unit) {
+        snapshotFlow { habitStatus.toMap() }.collectLatest { snapshot ->
+            delay(300)
+            withContext(Dispatchers.IO) { HabitStorage.saveStatus(context, snapshot) }
+        }
     }
 
     LaunchedEffect(firstDayOfWeek) {
@@ -1332,6 +1539,9 @@ fun AppRoot() {
         val lockObserver = LifecycleEventObserver { _, event ->
             when (event) {
                 Lifecycle.Event.ON_STOP -> {
+                    HabitStorage.save(context, habits.toList())
+                    HabitStorage.saveStatus(context, habitStatus.toMap())
+                    persistTodos(todos.toList())
                     if (appLockEnabled) {
                         lastBackgroundedAt = System.currentTimeMillis()
                     }
@@ -1387,6 +1597,7 @@ fun AppRoot() {
         if (isAddHabit) {
             AddHabitScreen(
                 existingHabit = editingHabit,
+                initialStartDate = newHabitStartDate,
                 onBack = {
                     showAddHabit = false
                     editingHabit = null
@@ -1433,20 +1644,31 @@ fun AppRoot() {
                             end = padding.calculateEndPadding(LocalLayoutDirection.current)
                         )
                 ) {
+                    val saveableStateHolder = rememberSaveableStateHolder()
                     Crossfade(
                         targetState = currentScreen,
                         animationSpec = tween(220),
                         label = "tabSwitchTransition"
                     ) { screen ->
+                    saveableStateHolder.SaveableStateProvider(screen.name) {
                     when (screen) {
-                                            Screen.TASKS -> TasksScreen(
+                        Screen.HOME -> HomeTodoScreen(
+                            bottomContentPadding = padding.calculateBottomPadding(),
+                            firstDayOfWeek = firstDayOfWeek,
+                            todos = todos,
+                            soundOnComplete = soundOnComplete,
+                            onTaskDeleted = { showTodoDeletedBanner = true },
+                            onSettingsClick = { currentScreen = Screen.SETTINGS }
+                        )
+                        Screen.TASKS -> TasksScreen(
                             habits = habits,
                             habitStatus = habitStatus,
-                            onAddHabit = {
+                            onAddHabit = { startDate ->
                                 if (habits.size >= MAX_ACTIVE_HABITS) {
                                     showHabitLimitBanner = true
                                 } else {
                                     editingHabit = null
+                                    newHabitStartDate = startDate
                                     showAddHabit = true
                                 }
                             },
@@ -1478,6 +1700,8 @@ fun AppRoot() {
                             onDeleteAllData = {
                                 habits.clear()
                                 habitStatus.clear()
+                                todos.clear()
+                                showDeleteAllBanner = true
                             },
                             bottomContentPadding = padding.calculateBottomPadding(),
                             firstDayOfWeek = firstDayOfWeek,
@@ -1500,6 +1724,7 @@ fun AppRoot() {
                             onAutoLockTimeoutChange = { autoLockTimeout = it }
                         )
                     }
+                    }
                 }
             }
         }
@@ -1507,19 +1732,102 @@ fun AppRoot() {
     }
     }
     }
+    TopBanner(
+        visible = showDeletedBanner,
+        message = "Habit deleted successfully",
+        icon = Icons.Default.CheckCircle,
+        iconTint = Color(0xFF4CAF50),
+        onDismiss = { showDeletedBanner = false },
+        modifier = Modifier.align(Alignment.TopCenter)
+    )
+    TopBanner(
+        visible = showTodoDeletedBanner,
+        message = "Task deleted successfully",
+        icon = Icons.Default.CheckCircle,
+        iconTint = Color(0xFF4CAF50),
+        onDismiss = { showTodoDeletedBanner = false },
+        modifier = Modifier.align(Alignment.TopCenter)
+    )
+    TopBanner(
+        visible = showDeleteAllBanner,
+        message = "All data deleted successfully",
+        icon = Icons.Default.CheckCircle,
+        iconTint = Color(0xFF4CAF50),
+        onDismiss = { showDeleteAllBanner = false },
+        modifier = Modifier.align(Alignment.TopCenter)
+    )
+    TopBanner(
+        visible = showHabitLimitBanner,
+        message = "Maximum $MAX_ACTIVE_HABITS habits reached — delete one to add a new habit",
+        icon = Icons.Default.Info,
+        iconTint = Color(0xFFFFA726),
+        onDismiss = { showHabitLimitBanner = false },
+        modifier = Modifier.align(Alignment.TopCenter)
+    )
 }
+}
+
+@Composable
+fun TopBanner(
+    visible: Boolean,
+    message: String,
+    icon: androidx.compose.ui.graphics.vector.ImageVector,
+    iconTint: Color,
+    onDismiss: () -> Unit,
+    modifier: Modifier = Modifier
+) {
+    LaunchedEffect(visible) {
+        if (visible) {
+            delay(2500)
+            onDismiss()
+        }
+    }
+    AnimatedVisibility(
+        visible = visible,
+        modifier = modifier,
+        enter = slideInVertically(animationSpec = tween(300, easing = FastOutSlowInEasing)) { -it } + fadeIn(tween(300)),
+        exit = slideOutVertically(animationSpec = tween(250, easing = FastOutLinearInEasing)) { -it } + fadeOut(tween(250))
+    ) {
+        Row(
+            modifier = Modifier
+                .fillMaxWidth()
+                .clip(RoundedCornerShape(bottomStart = 20.dp, bottomEnd = 20.dp))
+                .background(Color(0xFF353A4A))
+                .statusBarsPadding()
+                .padding(horizontal = 20.dp, vertical = 16.dp),
+            verticalAlignment = Alignment.CenterVertically
+        ) {
+            Icon(icon, contentDescription = null, tint = iconTint, modifier = Modifier.size(24.dp))
+            Spacer(Modifier.width(12.dp))
+            Text(message, color = Color.White, fontSize = 16.sp)
+        }
+    }
 }
 
 @Composable
 fun BottomNavBar(current: Screen, onSelect: (Screen) -> Unit) {
     NavigationBar(
-        containerColor = Color(0xFF1C1D24)
+        containerColor = Color(0xFF1C1D24),
+        modifier = Modifier.height(64.dp)
     ) {
+        NavigationBarItem(
+            selected = current == Screen.HOME,
+            onClick = { onSelect(Screen.HOME) },
+            icon = { NavIconWithTooltip("Tasks") { Icon(Icons.Filled.CheckCircle, contentDescription = "Tasks", modifier = Modifier.size(22.dp)) } },
+            label = null,
+            colors = NavigationBarItemDefaults.colors(
+                selectedIconColor = Color.White,
+                selectedTextColor = Color.White,
+                indicatorColor = BlueAccent,
+                unselectedIconColor = TextGray,
+                unselectedTextColor = TextGray
+            )
+        )
         NavigationBarItem(
             selected = current == Screen.TASKS,
             onClick = { onSelect(Screen.TASKS) },
-            icon = { Icon(Icons.Filled.CheckCircle, contentDescription = "Tasks", modifier = Modifier.size(22.dp)) },
-            label = { Text("Tasks", fontSize = 11.sp, fontWeight = FontWeight.SemiBold) },
+            icon = { NavIconWithTooltip("Habits") { Icon(Icons.Default.Repeat, contentDescription = "Habits", modifier = Modifier.size(24.dp)) } },
+            label = null,
             colors = NavigationBarItemDefaults.colors(
                 selectedIconColor = Color.White,
                 selectedTextColor = Color.White,
@@ -1531,21 +1839,8 @@ fun BottomNavBar(current: Screen, onSelect: (Screen) -> Unit) {
         NavigationBarItem(
             selected = current == Screen.PDFS,
             onClick = { onSelect(Screen.PDFS) },
-            icon = { Icon(Icons.Filled.Description, contentDescription = "PDFs", modifier = Modifier.size(22.dp)) },
-            label = { Text("PDFs", fontSize = 11.sp, fontWeight = FontWeight.SemiBold) },
-            colors = NavigationBarItemDefaults.colors(
-                selectedIconColor = Color.White,
-                selectedTextColor = Color.White,
-                indicatorColor = BlueAccent,
-                unselectedIconColor = TextGray,
-                unselectedTextColor = TextGray
-            )
-        )
-        NavigationBarItem(
-            selected = current == Screen.SETTINGS,
-            onClick = { onSelect(Screen.SETTINGS) },
-            icon = { Icon(Icons.Filled.AccountCircle, contentDescription = "Me", modifier = Modifier.size(22.dp)) },
-            label = { Text("Me", fontSize = 11.sp, fontWeight = FontWeight.SemiBold) },
+            icon = { NavIconWithTooltip("PDFs") { Icon(Icons.Filled.Description, contentDescription = "PDFs", modifier = Modifier.size(22.dp)) } },
+            label = null,
             colors = NavigationBarItemDefaults.colors(
                 selectedIconColor = Color.White,
                 selectedTextColor = Color.White,
@@ -1557,6 +1852,897 @@ fun BottomNavBar(current: Screen, onSelect: (Screen) -> Unit) {
     }
 }
 
+@OptIn(ExperimentalMaterial3Api::class)
+@Composable
+fun NavIconWithTooltip(label: String, icon: @Composable () -> Unit) {
+    TooltipBox(
+        positionProvider = TooltipDefaults.rememberPlainTooltipPositionProvider(),
+        tooltip = { PlainTooltip { Text(label) } },
+        state = rememberTooltipState(),
+        modifier = Modifier.size(width = 56.dp, height = 32.dp)
+    ) {
+        Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
+            icon()
+        }
+    }
+}
+
+data class HomeTodoItem(
+    val id: Long,
+    val text: String,
+    val date: LocalDate,
+    val reminderTime: LocalTime? = null,
+    val completed: Boolean = false
+)
+
+fun calculateTodoDayProgress(date: LocalDate, todos: List<HomeTodoItem>): Pair<Int, Int> {
+    val dayTodos = todos.filter { it.date == date }
+    val totalCount = dayTodos.size
+    if (totalCount == 0) return 0 to 0
+    val completedCount = dayTodos.count { it.completed }
+    return completedCount to totalCount
+}
+
+@Composable
+fun HomeTodoScreen(bottomContentPadding: Dp = 0.dp, firstDayOfWeek: DayOfWeek = DayOfWeek.MONDAY, todos: SnapshotStateList<HomeTodoItem>, soundOnComplete: Boolean = true, onTaskDeleted: () -> Unit = {}, onSettingsClick: () -> Unit = {}) {
+    var showAddSheet by remember { mutableStateOf(false) }
+    var editingTodo by remember { mutableStateOf<HomeTodoItem?>(null) }
+    var menuOpenForTodoId by remember { mutableStateOf<Long?>(null) }
+    val pendingDoneIds = remember { mutableStateListOf<Long>() }
+    val leavingIds = remember { mutableStateListOf<Long>() }
+    val undoingIds = remember { mutableStateListOf<Long>() }
+
+    val density = LocalDensity.current
+    var headerHeight by remember { mutableStateOf(0.dp) }
+    val today = remember { LocalDate.now() }
+    val configuration = LocalConfiguration.current
+    val currentLocale = remember(configuration) { configuration.locales[0] }
+    val currentWeekMonday = remember(today, firstDayOfWeek) { weekStartFor(today, firstDayOfWeek) }
+    val centerPage = 5000
+    val pagerState = rememberPagerState(initialPage = centerPage) { centerPage * 2 }
+    val coroutineScope = rememberCoroutineScope()
+
+    fun completeTodoWithAnimation(todoId: Long) {
+        if (todoId in pendingDoneIds || todoId in undoingIds) return
+        pendingDoneIds.add(todoId)
+        if (soundOnComplete) CompletionSoundPlayer.play()
+        coroutineScope.launch {
+            delay(750)
+            leavingIds.add(todoId)
+            delay(220)
+            val index = todos.indexOfFirst { it.id == todoId }
+            if (index != -1) todos[index] = todos[index].copy(completed = true)
+            pendingDoneIds.remove(todoId)
+            leavingIds.remove(todoId)
+        }
+    }
+
+    fun undoTodoWithAnimation(todoId: Long) {
+        if (todoId in pendingDoneIds || todoId in undoingIds) return
+        undoingIds.add(todoId)
+        coroutineScope.launch {
+            delay(350)
+            leavingIds.add(todoId)
+            delay(220)
+            val index = todos.indexOfFirst { it.id == todoId }
+            if (index != -1) todos[index] = todos[index].copy(completed = false)
+            undoingIds.remove(todoId)
+            leavingIds.remove(todoId)
+        }
+    }
+
+    val weekOffset = pagerState.currentPage - centerPage
+    val monday = remember(weekOffset) { currentWeekMonday.plusWeeks(weekOffset.toLong()) }
+
+    var selectedDate by rememberSaveable { mutableStateOf(today) }
+
+    fun changeDay(delta: Int) {
+        val newDate = selectedDate.plusDays(delta.toLong())
+        selectedDate = newDate
+        val targetMonday = weekStartFor(newDate, firstDayOfWeek)
+        val weeksBetween = java.time.temporal.ChronoUnit.WEEKS.between(currentWeekMonday, targetMonday)
+        val targetPage = (centerPage + weeksBetween).toInt()
+        if (targetPage != pagerState.currentPage) {
+            coroutineScope.launch { pagerState.animateScrollToPage(targetPage) }
+        }
+    }
+    var showMonthPicker by remember { mutableStateOf(false) }
+
+    val titleText = when (selectedDate) {
+        today -> "TODAY"
+        today.minusDays(1) -> "YESTERDAY"
+        today.plusDays(1) -> "TOMORROW"
+        else -> selectedDate.format(DateTimeFormatter.ofPattern("MMM d", currentLocale)).uppercase()
+    }
+    val subtitleText = when {
+        selectedDate.isBefore(today) -> {
+            val (completed, total) = calculateTodoDayProgress(selectedDate, todos)
+            if (total == 0) "Nothing Scheduled" else "${(completed * 100) / total}% Finished"
+        }
+        selectedDate == today ->
+            selectedDate.format(DateTimeFormatter.ofPattern("MMM d"))
+        else -> selectedDate.format(DateTimeFormatter.ofPattern("EEEE", currentLocale))
+    }
+
+    Box(modifier = Modifier.fillMaxSize().background(DarkBg)) {
+        Box(
+            modifier = Modifier
+                .fillMaxSize()
+                .padding(top = (headerHeight - 90.dp).coerceAtLeast(0.dp))
+                .clip(RoundedCornerShape(topStart = 20.dp, topEnd = 20.dp))
+                .background(CardBg)
+        )
+        Column(
+            modifier = Modifier
+                .align(Alignment.TopCenter)
+                .widthIn(max = 600.dp)
+                .fillMaxSize()
+                .padding(horizontal = 12.dp)
+        ) {
+            Column(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .onGloballyPositioned { coordinates ->
+                        headerHeight = with(density) { coordinates.size.height.toDp() }
+                    }
+            ) {
+                Spacer(Modifier.height(20.dp))
+
+                Column {
+                    Row(
+                        modifier = Modifier.fillMaxWidth().height(48.dp),
+                        horizontalArrangement = Arrangement.SpaceBetween,
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        Text(titleText, color = Color.White, fontSize = 28.sp, fontWeight = FontWeight.ExtraBold)
+                        IconButton(onClick = onSettingsClick) {
+                            Icon(
+                                Icons.Default.Settings,
+                                contentDescription = "Settings",
+                                tint = Color.White,
+                                modifier = Modifier.size(28.dp)
+                            )
+                        }
+                    }
+                    Text(
+                        subtitleText,
+                        color = TextGray,
+                        fontSize = 16.sp,
+                        fontFamily = Tajawal,
+                        fontWeight = FontWeight.Medium,
+                        modifier = Modifier.clickable { showMonthPicker = true }
+                    )
+                }
+
+                Spacer(Modifier.height(20.dp))
+
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.SpaceBetween
+                ) {
+                    val weekdayLabels = (0..6).map { offset ->
+                        DayOfWeek.of(((firstDayOfWeek.value - 1 + offset) % 7) + 1)
+                            .getDisplayName(TextStyle.SHORT, currentLocale).uppercase()
+                    }
+                    weekdayLabels.forEachIndexed { index, label ->
+                        Text(
+                            label,
+                            color = TextGray,
+                            fontSize = 13.sp,
+                            fontFamily = Poppins,
+                            fontWeight = FontWeight.Light,
+                            modifier = Modifier.weight(1f),
+                            textAlign = TextAlign.Center
+                        )
+                    }
+                }
+
+                Spacer(Modifier.height(6.dp))
+
+                HorizontalPager(
+                    state = pagerState,
+                    modifier = Modifier.fillMaxWidth()
+                ) { page ->
+                    val pageMonday = remember(page, currentWeekMonday) { currentWeekMonday.plusWeeks((page - centerPage).toLong()) }
+                    val pageDays = remember(pageMonday) { (0..6).map { pageMonday.plusDays(it.toLong()) } }
+                    val pageProgress by remember(pageDays) {
+                        derivedStateOf {
+                            pageDays.map { d -> if (d.isBefore(today)) calculateTodoDayProgress(d, todos) else 0 to 0 }
+                        }
+                    }
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.SpaceBetween
+                    ) {
+                        pageDays.forEachIndexed { index, day ->
+                            val isSelected = day == selectedDate
+                            val isTodayDate = day == today
+                            val isPastDate = day.isBefore(today)
+                            val (dayCompleted, dayTotal) = pageProgress[index]
+                            val dayProgressFraction = if (dayTotal == 0) 0f else dayCompleted.toFloat() / dayTotal.toFloat()
+                            Column(
+                                horizontalAlignment = Alignment.CenterHorizontally,
+                                modifier = Modifier
+                                    .weight(1f)
+                            ) {
+                                Box(
+                                    modifier = Modifier.size(40.dp),
+                                    contentAlignment = Alignment.Center
+                                ) {
+                                    if (isPastDate && dayTotal > 0) {
+                                        Canvas(modifier = Modifier.size(34.dp)) {
+                                            val strokeWidthPx = 4.5.dp.toPx()
+                                            drawArc(
+                                                color = Color(0xFF3A3B44),
+                                                startAngle = -90f,
+                                                sweepAngle = 360f,
+                                                useCenter = false,
+                                                style = Stroke(width = strokeWidthPx, cap = StrokeCap.Round)
+                                            )
+                                            drawArc(
+                                                color = BlueAccent,
+                                                startAngle = -90f,
+                                                sweepAngle = 360f * dayProgressFraction,
+                                                useCenter = false,
+                                                style = Stroke(width = strokeWidthPx, cap = StrokeCap.Round)
+                                            )
+                                        }
+                                    }
+                                    Box(
+                                        modifier = Modifier
+                                            .size(38.5.dp)
+                                            .clip(CircleShape)
+                                            .background(if (isTodayDate) BlueAccent else Color.Transparent)
+                                            .clickable { selectedDate = day },
+                                        contentAlignment = Alignment.Center
+                                    ) {
+                                        Text(
+                                            "${day.dayOfMonth}",
+                                            color = if (isSelected || isTodayDate) Color.White else TextGray,
+                                            fontWeight = FontWeight.Bold,
+                                            fontSize = 18.sp
+                                        )
+                                    }
+                                }
+                                if (isSelected) {
+                                    Spacer(Modifier.height(4.dp))
+                                    Box(
+                                        Modifier
+                                            .width(24.dp)
+                                            .height(3.dp)
+                                            .clip(RoundedCornerShape(2.dp))
+                                            .background(BlueAccent)
+                                    )
+                                } else {
+                                    Spacer(Modifier.height(7.dp))
+                                }
+                            }
+                        }
+                    }
+                }
+
+                if (showMonthPicker) {
+                    MonthPickerDialog(
+                        year = today.year,
+                        onDismiss = { showMonthPicker = false },
+                        onMonthSelected = { month ->
+                            val firstOfMonth = LocalDate.of(today.year, month, 1)
+                            val targetMonday = weekStartFor(firstOfMonth, firstDayOfWeek)
+                            val weeksBetween = java.time.temporal.ChronoUnit.WEEKS.between(currentWeekMonday, targetMonday)
+                            coroutineScope.launch {
+                                pagerState.scrollToPage((centerPage + weeksBetween).toInt())
+                            }
+                            selectedDate = firstOfMonth
+                            showMonthPicker = false
+                        }
+                    )
+                }
+            }
+
+            Spacer(Modifier.height(24.dp))
+
+            Box(
+                modifier = Modifier
+                    .weight(1f)
+                    .pointerInput(Unit) {
+                        var totalDrag = 0f
+                        detectHorizontalDragGestures(
+                            onDragStart = { totalDrag = 0f },
+                            onHorizontalDrag = { change, dragAmount ->
+                                change.consume()
+                                totalDrag += dragAmount
+                            },
+                            onDragEnd = {
+                                val threshold = 80f
+                                when {
+                                    totalDrag <= -threshold -> changeDay(1)
+                                    totalDrag >= threshold -> changeDay(-1)
+                                }
+                                totalDrag = 0f
+                            }
+                        )
+                    }
+            ) {
+            LazyColumn(
+                modifier = Modifier.fillMaxSize(),
+                contentPadding = PaddingValues(bottom = bottomContentPadding + 100.dp),
+                verticalArrangement = Arrangement.spacedBy(12.dp)
+            ) {
+                items(todos.filter { it.date == selectedDate }.sortedBy { it.completed }, key = { "${it.id}-${it.completed}" }) { todo ->
+                    val isVisuallyDone = (todo.completed && todo.id !in undoingIds) || todo.id in pendingDoneIds
+                    val todoTextColor by animateColorAsState(
+                        targetValue = if (isVisuallyDone) TextGray else Color.White,
+                        animationSpec = tween(350),
+                        label = "todoTextColor"
+                    )
+                    val leaveAlpha by animateFloatAsState(
+                        targetValue = if (todo.id in leavingIds) 0f else 1f,
+                        animationSpec = tween(200),
+                        label = "todoLeaveAlpha"
+                    )
+                    Box(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .animateItem(
+                                fadeInSpec = tween(300),
+                                placementSpec = tween(350, easing = FastOutSlowInEasing)
+                            )
+                            .alpha(leaveAlpha)
+                    ) {
+                        Row(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .shadow(elevation = 4.dp, shape = RoundedCornerShape(14.dp), ambientColor = Color.Black, spotColor = Color.Black)
+                                .clip(RoundedCornerShape(14.dp))
+                                .background(ChipBg)
+                                .combinedClickable(
+                                    onClick = {},
+                                    onLongClick = { menuOpenForTodoId = todo.id }
+                                )
+                                .padding(16.dp),
+                            verticalAlignment = Alignment.CenterVertically
+                        ) {
+                            val checkboxScale = remember(todo.id) { Animatable(1f) }
+                            LaunchedEffect(todo.id in pendingDoneIds) {
+                                if (todo.id in pendingDoneIds) {
+                                    checkboxScale.snapTo(0.55f)
+                                    checkboxScale.animateTo(
+                                        1f,
+                                        animationSpec = spring(dampingRatio = Spring.DampingRatioMediumBouncy, stiffness = Spring.StiffnessMedium)
+                                    )
+                                }
+                            }
+                            Box(
+                                modifier = Modifier
+                                    .size(22.dp)
+                                    .scale(checkboxScale.value)
+                                    .clip(CircleShape)
+                                    .background(if (isVisuallyDone) BlueAccent else Color.Transparent)
+                                    .border(width = 2.dp, color = if (isVisuallyDone) BlueAccent else TextGray, shape = CircleShape)
+                                    .clickable(
+                                        interactionSource = remember { MutableInteractionSource() },
+                                        indication = null
+                                    ) {
+                                        if (todo.completed) {
+                                            undoTodoWithAnimation(todo.id)
+                                        } else {
+                                            completeTodoWithAnimation(todo.id)
+                                        }
+                                    },
+                                contentAlignment = Alignment.Center
+                            ) {
+                                if (isVisuallyDone) {
+                                    Icon(Icons.Default.Check, contentDescription = null, tint = Color.White, modifier = Modifier.size(14.dp))
+                                }
+                            }
+                            Spacer(Modifier.width(12.dp))
+                            AnimatedContent(
+                                targetState = isVisuallyDone,
+                                transitionSpec = { fadeIn(tween(250)) togetherWith fadeOut(tween(250)) },
+                                label = "todoStrikeThrough"
+                            ) { isDone ->
+                                Text(
+                                    todo.text,
+                                    color = todoTextColor,
+                                    fontSize = 16.sp,
+                                    textDecoration = if (isDone) TextDecoration.LineThrough else null
+                                )
+                            }
+                        }
+                        if (todo.id in pendingDoneIds) {
+                            CardPopperBurst(trigger = todo.id)
+                        }
+                    }
+                    if (menuOpenForTodoId == todo.id) {
+                        TodoOptionsSheet(
+                            todo = todo,
+                            onDismiss = { menuOpenForTodoId = null },
+                            onEdit = {
+                                editingTodo = todo
+                                showAddSheet = true
+                            },
+                            onDelete = {
+                                todos.removeAll { it.id == todo.id }
+                                onTaskDeleted()
+                            },
+                            onShift = {
+                                val index = todos.indexOfFirst { it.id == todo.id }
+                                if (index != -1) todos[index] = todo.copy(date = todo.date.plusDays(1))
+                            },
+                            onDone = {
+                                completeTodoWithAnimation(todo.id)
+                            },
+                            onUndo = {
+                                undoTodoWithAnimation(todo.id)
+                            }
+                        )
+                    }
+                }
+            }
+            }
+        }
+
+        if (!selectedDate.isBefore(today)) {
+            Box(
+                modifier = Modifier
+                    .align(Alignment.BottomEnd)
+                    .padding(end = 20.dp, bottom = 20.dp + bottomContentPadding)
+                    .size(56.dp)
+                    .clip(CircleShape)
+                    .background(BlueAccent)
+                    .clickable { showAddSheet = true },
+                contentAlignment = Alignment.Center
+            ) {
+                Icon(Icons.Default.Add, contentDescription = "Add to-do", tint = Color.White, modifier = Modifier.size(28.dp))
+            }
+        }
+
+    }
+
+    AddSheetHost(isVisible = { showAddSheet }) {
+        QuickAddTodoSheet(
+            initialText = editingTodo?.text ?: "",
+            initialReminderTime = editingTodo?.reminderTime,
+            onDismiss = { showAddSheet = false; editingTodo = null },
+            onSave = { text, reminderTime ->
+                val currentEditing = editingTodo
+                if (currentEditing != null) {
+                    val index = todos.indexOfFirst { it.id == currentEditing.id }
+                    if (index != -1) {
+                        val reminderChanged = reminderTime != null && reminderTime != currentEditing.reminderTime
+                        val newDate = if (reminderChanged && !currentEditing.completed && currentEditing.date.isBefore(LocalDate.now())) {
+                            LocalDate.now()
+                        } else {
+                            currentEditing.date
+                        }
+                        todos[index] = currentEditing.copy(text = text, reminderTime = reminderTime, date = newDate)
+                    }
+                } else {
+                    todos.add(0, HomeTodoItem(id = System.currentTimeMillis(), text = text, date = selectedDate, reminderTime = reminderTime))
+                }
+                showAddSheet = false
+                editingTodo = null
+            }
+        )
+    }}
+
+data class ConfettiParticle(
+    val angleDeg: Float,
+    val speed: Float,
+    val color: Color,
+    val size: Float,
+    val delayMs: Int,
+    val isCircle: Boolean
+)
+
+@Composable
+fun BoxScope.CardPopperBurst(trigger: Long, durationMs: Int = 800, originXDp: Dp = 27.dp) {
+    val popperColors = listOf(
+        Color(0xFFFFC542), Color(0xFF3B7BF5), Color(0xFFE55353),
+        Color(0xFF4CD964), Color(0xFFFF6FB2), Color(0xFF8E6CFF), Color(0xFF2EE6D0)
+    )
+    val particles = remember(trigger) {
+        List(42) {
+            ConfettiParticle(
+                angleDeg = Random.nextFloat() * 360f,
+                speed = Random.nextFloat() * 0.5f + 0.75f,
+                color = popperColors.random(),
+                size = Random.nextFloat() * 5f + 4f,
+                delayMs = Random.nextInt(0, 90),
+                isCircle = Random.nextBoolean()
+            )
+        }
+    }
+    val progress = remember(trigger) { Animatable(0f) }
+    LaunchedEffect(trigger) {
+        progress.snapTo(0f)
+        progress.animateTo(1f, animationSpec = tween(durationMs, easing = FastOutSlowInEasing))
+    }
+    Canvas(modifier = Modifier.matchParentSize().zIndex(1f)) {
+        val originX = originXDp.toPx()
+        val originY = size.height / 2f
+
+        val ringT = (progress.value / 0.4f).coerceIn(0f, 1f)
+        if (ringT > 0f && ringT < 1f) {
+            drawCircle(
+                color = Color.White.copy(alpha = (1f - ringT) * 0.5f),
+                radius = 10f + ringT * 70f,
+                center = Offset(originX, originY),
+                style = Stroke(width = 3f)
+            )
+        }
+
+        particles.forEach { p ->
+            val t = (((progress.value * durationMs) - p.delayMs) / durationMs.toFloat()).coerceIn(0f, 1f)
+            if (t > 0f) {
+                val angleRad = Math.toRadians(p.angleDeg.toDouble())
+                val distance = 150f * p.speed * t
+                val gravity = 50f * t * t
+                val x = originX + (cos(angleRad) * distance).toFloat()
+                val y = originY + (sin(angleRad) * distance).toFloat() + gravity
+                val alpha = (1f - t).coerceIn(0f, 1f)
+                val particleSize = p.size * (1f - t * 0.25f)
+                if (p.isCircle) {
+                    drawCircle(color = p.color.copy(alpha = alpha), radius = particleSize / 2f, center = Offset(x, y))
+                } else {
+                    rotate(degrees = p.angleDeg + t * 280f, pivot = Offset(x, y)) {
+                        drawRect(
+                            color = p.color.copy(alpha = alpha),
+                            topLeft = Offset(x - particleSize / 2f, y - particleSize / 2f),
+                            size = Size(particleSize, particleSize * 1.5f)
+                        )
+                    }
+                }
+            }
+        }
+    }
+}
+
+@Composable
+fun TodoOptionsSheet(
+    todo: HomeTodoItem,
+    onDismiss: () -> Unit,
+    onEdit: () -> Unit,
+    onDelete: () -> Unit,
+    onShift: () -> Unit,
+    onDone: () -> Unit,
+    onUndo: () -> Unit
+) {
+    val todoSheetNestedScrollConnection = remember {
+        object : NestedScrollConnection {
+            var totalOverscroll = 0f
+            override fun onPostScroll(consumed: Offset, available: Offset, source: NestedScrollSource): Offset {
+                if (available.y > 0f) {
+                    totalOverscroll += available.y
+                    if (totalOverscroll > 300f) {
+                        onDismiss()
+                    }
+                } else {
+                    totalOverscroll = 0f
+                }
+                return Offset.Zero
+            }
+        }
+    }
+    Dialog(
+        onDismissRequest = onDismiss,
+        properties = DialogProperties(usePlatformDefaultWidth = false)
+    ) {
+        Box(
+            modifier = Modifier
+                .fillMaxSize()
+                .clickable(
+                    indication = null,
+                    interactionSource = remember { MutableInteractionSource() }
+                ) { onDismiss() },
+            contentAlignment = Alignment.BottomCenter
+        ) {
+            Surface(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .nestedScroll(todoSheetNestedScrollConnection)
+                    .clickable(
+                        indication = null,
+                        interactionSource = remember { MutableInteractionSource() }
+                    ) {  },
+                shape = RoundedCornerShape(topStart = 20.dp, topEnd = 20.dp),
+                color = CardBg
+            ) {
+                Column(
+                    modifier = Modifier
+                        .padding(20.dp)
+                        .heightIn(max = 420.dp)
+                        .verticalScroll(rememberScrollState())
+                ) {
+                    Text(
+                        todo.text,
+                        color = Color.White,
+                        fontWeight = FontWeight.Bold,
+                        fontSize = 18.sp,
+                        maxLines = 2,
+                        overflow = TextOverflow.Ellipsis
+                    )
+
+                    Spacer(Modifier.height(20.dp))
+                    HorizontalDivider(color = Color(0xFF3A3B44))
+                    Spacer(Modifier.height(16.dp))
+
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.SpaceEvenly
+                    ) {
+                        PdfSheetQuickAction(Icons.Default.Delete, "Delete", tint = Color(0xFFE55353)) { onDismiss(); onDelete() }
+                        PdfSheetQuickAction(Icons.AutoMirrored.Filled.DriveFileMove, "Shift", enabled = !todo.completed) { onDismiss(); onShift() }
+                        if (todo.completed) {
+                            PdfSheetQuickAction(Icons.AutoMirrored.Filled.Undo, "Undo", tint = Color(0xFFFFC542)) { onDismiss(); onUndo() }
+                        } else {
+                            PdfSheetQuickAction(Icons.Default.Check, "Done", tint = Color(0xFF4CD964)) { onDismiss(); onDone() }
+                        }
+                        PdfSheetQuickAction(Icons.Default.Edit, "Edit") { onDismiss(); onEdit() }
+                    }
+                }
+            }
+        }
+    }
+}
+
+@Composable
+fun AddSheetHost(isVisible: () -> Boolean, content: @Composable () -> Unit) {
+    if (isVisible()) {
+        content()
+    }
+}
+
+@Composable
+fun QuickAddTodoSheet(
+    initialText: String = "",
+    initialReminderTime: LocalTime? = null,
+    onDismiss: () -> Unit,
+    onSave: (String, LocalTime?) -> Unit
+) {
+    var textFieldValue by remember {
+        mutableStateOf(
+            TextFieldValue(
+                text = initialText,
+                selection = TextRange(initialText.length)
+            )
+        )
+    }
+    val text = textFieldValue.text
+    var reminderTime by remember { mutableStateOf(initialReminderTime) }
+    var showTimePicker by remember { mutableStateOf(false) }
+    val focusRequester = remember { FocusRequester() }
+    val keyboardController = LocalSoftwareKeyboardController.current
+
+    var closeAction by remember { mutableStateOf<(() -> Unit)?>(null) }
+    val exitProgress by animateFloatAsState(
+        targetValue = if (closeAction != null) 1f else 0f,
+        animationSpec = tween(durationMillis = 220, easing = FastOutLinearInEasing),
+        label = "quickAddSheetExit"
+    )
+    var hasEntered by remember { mutableStateOf(false) }
+    val enterProgress by animateFloatAsState(
+        targetValue = if (hasEntered) 1f else 0f,
+        animationSpec = tween(durationMillis = 180, easing = FastOutSlowInEasing),
+        label = "quickAddSheetEnter"
+    )
+    LaunchedEffect(closeAction) {
+        val action = closeAction
+        if (action != null) {
+            delay(240)
+            action()
+        }
+    }
+    val dismissWithAnimation: () -> Unit = {
+        if (closeAction == null) closeAction = onDismiss
+    }
+
+    BackHandler(onBack = dismissWithAnimation)
+
+    LaunchedEffect(Unit) {
+        // Do real VSync frames ka wait — ye guarantee karta hai ki content
+        // actually screen pe draw/composite ho chuka hai, sirf measured nahi hai.
+        // Cold start pe ye gap bada ho sakta hai isliye onGloballyPositioned kaafi nahi tha.
+        withFrameNanos {}
+        withFrameNanos {}
+        hasEntered = true
+        // Entrance animation ko visibly shuru hone ka thoda time do, phir hi
+        // keyboard request karo — isse keyboard kabhi bhi popup se pehle nahi uthega,
+        // chahe device cold ho ya warm.
+        delay(80)
+        repeat(20) {
+            try {
+                focusRequester.requestFocus()
+                return@LaunchedEffect
+            } catch (e: IllegalStateException) {
+                delay(16)
+            }
+        }
+    }
+
+    Dialog(
+        onDismissRequest = dismissWithAnimation,
+        properties = DialogProperties(
+            usePlatformDefaultWidth = false,
+            decorFitsSystemWindows = false
+        )
+    ) {
+    val currentOnDismiss by rememberUpdatedState(dismissWithAnimation)
+    val dialogWindow = (LocalView.current.parent as? DialogWindowProvider)?.window
+    SideEffect { dialogWindow?.setDimAmount(0f) }
+    val dialogView = LocalView.current
+    val hideDialogKeyboard: () -> Unit = {
+        dialogWindow?.let { w ->
+            WindowCompat.getInsetsController(w, dialogView)
+                .hide(androidx.core.view.WindowInsetsCompat.Type.ime())
+        }
+    }
+    val imeInsets = WindowInsets.ime
+    val imeDensity = LocalDensity.current
+    LaunchedEffect(Unit) {
+        var lastImeHeight = imeInsets.getBottom(imeDensity)
+        var peakImeHeight = 0
+        var keyboardHasRisen = false
+        val closeTolerancePx = with(imeDensity) { 8.dp.toPx() }
+        snapshotFlow { imeInsets.getBottom(imeDensity) }
+            .collect { imeHeight ->
+                if (imeHeight > lastImeHeight) keyboardHasRisen = true
+                lastImeHeight = imeHeight
+                if (keyboardHasRisen) {
+                    if (imeHeight > peakImeHeight) {
+                        peakImeHeight = imeHeight
+                    } else if (imeHeight < peakImeHeight - closeTolerancePx) {
+                        peakImeHeight = 0
+                        keyboardHasRisen = false
+                        if (!showTimePicker) currentOnDismiss()
+                    }
+                }
+            }
+    }
+    Box(
+        modifier = Modifier
+            .fillMaxSize()
+            .drawBehind {
+                drawRect(Color.Black.copy(alpha = 0.6f * (1f - exitProgress)))
+            }
+            .clickable(
+                indication = null,
+                interactionSource = remember { MutableInteractionSource() }
+            ) {
+                hideDialogKeyboard()
+                dismissWithAnimation()
+            },
+        contentAlignment = Alignment.BottomCenter
+    ) {
+        Surface(
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(horizontal = 10.dp)
+                .windowInsetsPadding(WindowInsets.ime.union(WindowInsets.navigationBars))
+                .padding(bottom = 8.dp)
+                .graphicsLayer {
+                    val shownFraction = enterProgress * (1f - exitProgress)
+                    translationY = (1f - shownFraction) * size.height
+                    alpha = shownFraction
+                }
+                .clickable(
+                    indication = null,
+                    interactionSource = remember { MutableInteractionSource() }
+                ) { /* absorb taps so sheet doesn't dismiss when tapped */ },
+            shape = RoundedCornerShape(14.dp),
+            color = CardBg
+        ) {
+            Column(
+                modifier = Modifier.padding(start = 20.dp, top = 24.dp, end = 20.dp, bottom = 14.dp)
+            ) {
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    Box(
+                        modifier = Modifier
+                            .size(16.dp)
+                            .clip(CircleShape)
+                            .background(Color.Transparent)
+                            .border(width = 1.5.dp, color = TextGray, shape = CircleShape)
+                    )
+                    Spacer(Modifier.width(12.dp))
+                    OutlinedTextField(
+                        value = textFieldValue,
+                        onValueChange = { textFieldValue = it },
+                        placeholder = {
+                            Text("Add a new task...", color = TextGray, fontStyle = FontStyle.Italic)
+                        },
+                        modifier = Modifier
+                            .weight(1f)
+                            .heightIn(min = 56.dp, max = 160.dp)
+                            .focusRequester(focusRequester),
+                        colors = OutlinedTextFieldDefaults.colors(
+                            focusedTextColor = Color.White,
+                            unfocusedTextColor = Color.White,
+                            focusedBorderColor = Color.Transparent,
+                            unfocusedBorderColor = Color.Transparent
+                        )
+                    )
+                }
+                Spacer(Modifier.height(16.dp))
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.SpaceBetween,
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    Row(
+                        modifier = Modifier
+                            .clip(RoundedCornerShape(8.dp))
+                            .background(if (reminderTime != null) BlueAccent else Color(0xFF33343D))
+                            .padding(start = 8.dp, top = 6.dp, end = 10.dp, bottom = 6.dp),
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        Row(
+                            modifier = Modifier.clickable { showTimePicker = true },
+                            verticalAlignment = Alignment.CenterVertically
+                        ) {
+                            Icon(Icons.Default.Notifications, contentDescription = null, tint = Color.White, modifier = Modifier.size(16.dp))
+                            Spacer(Modifier.width(6.dp))
+                            if (reminderTime != null) {
+                                Text(
+                                    reminderTime!!.format(DateTimeFormatter.ofPattern("HH:mm")),
+                                    color = Color.White,
+                                    fontWeight = FontWeight.Bold,
+                                    fontSize = 13.sp
+                                )
+                            } else {
+                                Text("Set reminder", color = Color.White, fontWeight = FontWeight.Bold, fontSize = 13.sp)
+                            }
+                        }
+                        if (reminderTime != null) {
+                            Spacer(Modifier.width(10.dp))
+                            Box(
+                                modifier = Modifier
+                                    .width(1.dp)
+                                    .height(14.dp)
+                                    .background(Color.White.copy(alpha = 0.4f))
+                            )
+                            Spacer(Modifier.width(10.dp))
+                            Icon(
+                                Icons.Default.Close,
+                                contentDescription = "Cancel reminder",
+                                tint = Color.White,
+                                modifier = Modifier
+                                    .clickable(
+                                        indication = null,
+                                        interactionSource = remember { MutableInteractionSource() }
+                                    ) { reminderTime = null }
+                                    .padding(horizontal = 4.dp, vertical = 3.dp)
+                                    .size(16.dp)
+                            )
+                        }
+                    }
+                    Box(
+                        modifier = Modifier
+                            .clip(RoundedCornerShape(8.dp))
+                            .background(if (text.isNotBlank()) BlueAccent else Color(0xFF33343D))
+                            .clickable(enabled = text.isNotBlank()) {
+                                keyboardController?.hide()
+                                if (closeAction == null) {
+                                    closeAction = { onSave(text, reminderTime) }
+                                }
+                            }
+                            .padding(horizontal = 10.dp, vertical = 6.dp)
+                    ) {
+                        Text("Done", color = Color.White, fontWeight = FontWeight.Bold)
+                    }
+                }
+            }
+        }
+    }
+    }
+
+    if (showTimePicker) {
+        HabitTimePickerDialog(
+            initialTime = reminderTime,
+            onDismiss = { showTimePicker = false },
+            onConfirm = { reminderTime = it; showTimePicker = false; keyboardController?.show() }
+        )
+    }
+}
 @Composable
 fun SettingsCard(content: @Composable ColumnScope.() -> Unit) {
     Column(
@@ -1787,7 +2973,12 @@ fun SettingsScreen(
                 .padding(horizontal = 20.dp)
         ) {
             Spacer(Modifier.height(20.dp))
-            Text("ME", color = Color.White, fontSize = 28.sp, fontWeight = FontWeight.Bold)
+            Row(
+                modifier = Modifier.fillMaxWidth().height(48.dp),
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                Text("SETTINGS", color = Color.White, fontSize = 28.sp, fontWeight = FontWeight.ExtraBold)
+            }
             Spacer(Modifier.height(20.dp))
 
             PrivacyBadgeCard()
@@ -1898,7 +3089,7 @@ fun SettingsScreen(
                 onDismissRequest = { showDeleteConfirm = false },
                 title = { Text("Delete all data?") },
                 text = {
-                    Text("This will permanently delete all your habits from this app. Your PDFs will not be affected. This cannot be undone.")
+                    Text("This will permanently delete all your habits and to-do tasks from this app. Your PDFs will not be affected. This cannot be undone.")
                 },
                 confirmButton = {
                     TextButton(onClick = {
@@ -2046,7 +3237,7 @@ fun PermissionsScreen(onBack: () -> Unit, bottomContentPadding: Dp = 0.dp) {
                     if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
                         val intent = Intent(Settings.ACTION_REQUEST_SCHEDULE_EXACT_ALARM)
                             .apply { data = Uri.parse("package:${context.packageName}") }
-                        safeLaunchPermission(context) { settingsResultLauncher.launch(intent) }
+                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                        safeLaunchPermission(context) { settingsResultLauncher.launch(intent) }
                     }
                 }
             )
@@ -2061,17 +3252,6 @@ fun PermissionsScreen(onBack: () -> Unit, bottomContentPadding: Dp = 0.dp) {
                             .apply { data = Uri.parse("package:${context.packageName}") }
                         safeLaunchPermission(context) { settingsResultLauncher.launch(intent) }
                     }
-                }
-            )
-            HorizontalDivider(color = Color(0xFF3A3B44))
-            PermissionToggleRow(
-                title = "Battery optimization",
-                subtitle = "Prevents the system from delaying or killing reminders in the background",
-                checked = batteryOptimizationGranted,
-                onToggle = {
-                    val intent = Intent(Settings.ACTION_REQUEST_IGNORE_BATTERY_OPTIMIZATIONS)
-                        .apply { data = Uri.parse("package:${context.packageName}") }
-                    safeLaunchPermission(context) { settingsResultLauncher.launch(intent) }
                 }
             )
             HorizontalDivider(color = Color(0xFF3A3B44))
@@ -2096,6 +3276,16 @@ fun PermissionsScreen(onBack: () -> Unit, bottomContentPadding: Dp = 0.dp) {
                             )
                         }
                     }
+                }
+            )
+            HorizontalDivider(color = Color(0xFF3A3B44))
+            SettingsRow(
+                title = "Battery optimization",
+                subtitle = "Prevents the system from delaying or killing reminders in the background",
+                onClick = {
+                    val intent = Intent(Settings.ACTION_REQUEST_IGNORE_BATTERY_OPTIMIZATIONS)
+                        .apply { data = Uri.parse("package:${context.packageName}") }
+                    safeLaunchPermission(context) { settingsResultLauncher.launch(intent) }
                 }
             )
             HorizontalDivider(color = Color(0xFF3A3B44))
@@ -2257,7 +3447,7 @@ fun PrivacyPolicyScreen(onBack: () -> Unit, bottomContentPadding: Dp = 0.dp) {
 
         sectionTitle("8. Contact Us")
         sectionBody(
-            "If you have any questions about this Privacy Policy, reach out at idabvx@protonmail.com."
+            "If you have any questions about this Privacy Policy, reach out at idabhinavx@protonmail\u200B.com."
         )
 
         Spacer(Modifier.height(20.dp))
@@ -2502,7 +3692,11 @@ private fun launchFingerprintPrompt(
 }
 
 @Composable
-fun AppSplashScreen() {
+fun AppSplashScreen(onFirstFrame: () -> Unit = {}) {
+    LaunchedEffect(Unit) {
+        withFrameNanos { }
+        onFirstFrame()
+    }
     Box(
         modifier = Modifier.fillMaxSize().background(DarkBg),
         contentAlignment = Alignment.Center
@@ -3002,7 +4196,7 @@ fun computeStreak(
 fun TasksScreen(
     habits: List<Habit>,
     habitStatus: SnapshotStateMap<Pair<Long, LocalDate>, HabitStatus>,
-    onAddHabit: () -> Unit,
+    onAddHabit: (LocalDate) -> Unit,
     onEditHabit: (Habit) -> Unit,
     showDeletedBanner: Boolean,
     onDismissDeletedBanner: () -> Unit,
@@ -3019,6 +4213,9 @@ fun TasksScreen(
     val density = LocalDensity.current
     var headerHeight by remember { mutableStateOf(0.dp) }
     val today = remember { LocalDate.now() }
+    val streakByHabit by remember(habits, habitStatus, today) {
+        derivedStateOf { habits.associate { it.id to computeStreak(it, habitStatus, today) } }
+    }
     val context = LocalContext.current
     val configuration = LocalConfiguration.current
     val currentLocale = remember(configuration) { configuration.locales[0] }
@@ -3030,7 +4227,7 @@ fun TasksScreen(
     val weekOffset = pagerState.currentPage - centerPage
     val monday = remember(weekOffset) { currentWeekMonday.plusWeeks(weekOffset.toLong()) }
 
-    var selectedDate by remember { mutableStateOf(today) }
+    var selectedDate by rememberSaveable { mutableStateOf(today) }
 
     fun changeDay(delta: Int) {
         val newDate = selectedDate.plusDays(delta.toLong())
@@ -3042,7 +4239,7 @@ fun TasksScreen(
             coroutineScope.launch { pagerState.animateScrollToPage(targetPage) }
         }
     }
-    var selectedFilter by remember { mutableStateOf("ALL") }
+    var selectedFilter by rememberSaveable { mutableStateOf("ALL") }
     var menuOpenForHabitId by remember { mutableStateOf<Long?>(null) }
     var skipConfirmHabit by remember { mutableStateOf<Habit?>(null) }
     var showMonthPicker by remember { mutableStateOf(false) }
@@ -3077,6 +4274,8 @@ fun TasksScreen(
     )
     Column(
         modifier = Modifier
+            .align(Alignment.TopCenter)
+            .widthIn(max = 600.dp)
             .fillMaxSize()
             .padding(horizontal = 12.dp)
     ) {
@@ -3087,73 +4286,37 @@ fun TasksScreen(
                     headerHeight = with(density) { coordinates.size.height.toDp() }
                 }
         ) {
-        if (showDeletedBanner) {
-            LaunchedEffect(showDeletedBanner) {
-                delay(2500)
-                onDismissDeletedBanner()
-            }
-            Row(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .padding(top = 10.dp),
-                verticalAlignment = Alignment.CenterVertically
-            ) {
-                Icon(Icons.Default.CheckCircle, contentDescription = null, tint = Color(0xFF4CAF50), modifier = Modifier.size(20.dp))
-                Spacer(Modifier.width(8.dp))
-                Text("Habit deleted successfully", color = Color.White, fontSize = 15.sp)
-            }
-        }
-
-        if (showHabitLimitBanner) {
-            LaunchedEffect(showHabitLimitBanner) {
-                delay(2500)
-                onDismissHabitLimitBanner()
-            }
-            Row(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .padding(top = 10.dp),
-                verticalAlignment = Alignment.CenterVertically
-            ) {
-                Icon(Icons.Default.Info, contentDescription = null, tint = Color(0xFFFFA726), modifier = Modifier.size(20.dp))
-                Spacer(Modifier.width(8.dp))
-                Text("Maximum $MAX_ACTIVE_HABITS habits reached — delete one to add a new habit", color = Color.White, fontSize = 15.sp)
-            }
-        }
-
         Spacer(Modifier.height(20.dp))
 
-        Row(
-            modifier = Modifier.fillMaxWidth(),
-            horizontalArrangement = Arrangement.SpaceBetween,
-            verticalAlignment = Alignment.CenterVertically
-        ) {
-            Column {
+        Column {
+            Row(
+                modifier = Modifier.fillMaxWidth().height(48.dp),
+                horizontalArrangement = Arrangement.SpaceBetween,
+                verticalAlignment = Alignment.CenterVertically
+            ) {
                 Text(titleText, color = Color.White, fontSize = 28.sp, fontWeight = FontWeight.ExtraBold)
-                                                Text(
-                    subtitleText,
-                    color = TextGray,
-                    fontSize = 16.sp,
-                    fontFamily = Tajawal,
-                    fontWeight = FontWeight.Medium,
-                    modifier = Modifier.clickable { showMonthPicker = true }
-                )
-            }
-            if (!selectedDate.isBefore(today)) {
-                Box(
-                    modifier = Modifier
-                        .size(44.dp)
-                        .shadow(elevation = 14.dp, shape = CircleShape, ambientColor = BlueAccent, spotColor = BlueAccent)
-                        .clip(CircleShape)
-                        .background(BlueAccent)
-                        .border(width = 2.dp, color = Color.White.copy(alpha = 0.25f), shape = CircleShape)
-                        .clickable { onAddHabit() }
-                        .onGloballyPositioned { coordinates -> topAddButtonRect = coordinates.boundsInRoot() },
-                    contentAlignment = Alignment.Center
-                ) {
-                    Icon(Icons.Default.Add, contentDescription = "Add habit", tint = Color.White, modifier = Modifier.size(22.dp))
+                if (!selectedDate.isBefore(today)) {
+                    IconButton(
+                        onClick = { onAddHabit(selectedDate) },
+                        modifier = Modifier.onGloballyPositioned { coordinates -> topAddButtonRect = coordinates.boundsInRoot() }
+                    ) {
+                        Icon(
+                            Icons.Default.Add,
+                            contentDescription = "Add habit",
+                            tint = Color.White,
+                            modifier = Modifier.size(28.dp)
+                        )
+                    }
                 }
             }
+            Text(
+                subtitleText,
+                color = TextGray,
+                fontSize = 16.sp,
+                fontFamily = Tajawal,
+                fontWeight = FontWeight.Medium,
+                modifier = Modifier.clickable { showMonthPicker = true }
+            )
         }
 
         Spacer(Modifier.height(20.dp))
@@ -3173,7 +4336,7 @@ fun TasksScreen(
                     fontSize = 13.sp,
                     fontFamily = Poppins,
                     fontWeight = FontWeight.Light,
-                    modifier = Modifier.width(48.dp),
+                    modifier = Modifier.weight(1f),
                     textAlign = TextAlign.Center
                 )
             }
@@ -3185,8 +4348,13 @@ fun TasksScreen(
             state = pagerState,
             modifier = Modifier.fillMaxWidth()
         ) { page ->
-            val pageMonday = currentWeekMonday.plusWeeks((page - centerPage).toLong())
-            val pageDays = (0..6).map { pageMonday.plusDays(it.toLong()) }
+            val pageMonday = remember(page, currentWeekMonday) { currentWeekMonday.plusWeeks((page - centerPage).toLong()) }
+            val pageDays = remember(pageMonday) { (0..6).map { pageMonday.plusDays(it.toLong()) } }
+            val pageProgress by remember(pageDays) {
+                derivedStateOf {
+                    pageDays.map { d -> if (d.isBefore(today)) calculateDayProgress(d, habits, habitStatus) else 0 to 0 }
+                }
+            }
             Row(
                 modifier = Modifier.fillMaxWidth(),
                 horizontalArrangement = Arrangement.SpaceBetween
@@ -3195,12 +4363,12 @@ fun TasksScreen(
                     val isSelected = day == selectedDate
                     val isTodayDate = day == today
                     val isPastDate = day.isBefore(today)
-                    val (dayCompleted, dayTotal) = if (isPastDate) calculateDayProgress(day, habits, habitStatus) else 0 to 0
+                    val (dayCompleted, dayTotal) = pageProgress[index]
                     val dayProgressFraction = if (dayTotal == 0) 0f else dayCompleted.toFloat() / dayTotal.toFloat()
                     Column(
                         horizontalAlignment = Alignment.CenterHorizontally,
                         modifier = Modifier
-                            .width(48.dp)
+                            .weight(1f)
                     ) {
                         Box(
                             modifier = Modifier.size(40.dp),
@@ -3282,8 +4450,11 @@ fun TasksScreen(
             horizontalArrangement = Arrangement.spacedBy(10.dp),
             contentPadding = PaddingValues(horizontal = 20.dp),
             modifier = Modifier
-                .requiredWidth(LocalConfiguration.current.screenWidthDp.dp)
-                .offset(x = 0.dp)
+                .layout { measurable, constraints ->
+                    val bleed = 12.dp.roundToPx()
+                    val placeable = measurable.measure(constraints.copy(maxWidth = constraints.maxWidth + bleed * 2))
+                    layout(constraints.maxWidth, placeable.height) { placeable.place(-bleed, 0) }
+                }
         ) {
             item { FilterChip("ALL", selectedFilter == "ALL", icon = Icons.Filled.Apps) { selectedFilter = "ALL" } }
             item { FilterChip("MORNING", selectedFilter == "MORNING", icon = Icons.Filled.WbTwilight) { selectedFilter = "MORNING" } }
@@ -3376,9 +4547,10 @@ fun TasksScreen(
                         HabitCard(
                             habit = habit,
                             status = status,
+                            date = selectedDate,
                             isToday = selectedDate == today,
                             isPast = selectedDate.isBefore(today),
-                            streakCount = computeStreak(habit, habitStatus, today),
+                            streakCount = streakByHabit[habit.id] ?: 0,
                             showStreak = showStreakCount,
                             menuExpanded = menuOpenForHabitId == habit.id,
                             onToggleDone = {
@@ -3468,6 +4640,7 @@ fun TasksScreen(
 fun HabitCard(
     habit: Habit,
     status: HabitStatus,
+    date: LocalDate,
     isToday: Boolean,
     isPast: Boolean,
     streakCount: Int = 0,
@@ -3482,8 +4655,18 @@ fun HabitCard(
 ) {
     val isChecked = status == HabitStatus.DONE || status == HabitStatus.SKIPPED
     val cardColor = if (status == HabitStatus.ACTIVE) BlueAccent else CardBg
-    val textColor = if (status == HabitStatus.ACTIVE) Color.White else TextGray
+   val textColor = if (status == HabitStatus.ACTIVE) Color.White else TextGray
 
+    var confettiTrigger by remember { mutableStateOf(0L) }
+    val previousStatus = remember(date) { mutableStateOf(status) }
+    LaunchedEffect(status, date) {
+        if (status == HabitStatus.DONE && previousStatus.value != HabitStatus.DONE) {
+            confettiTrigger = System.currentTimeMillis()
+        }
+        previousStatus.value = status
+    }
+
+    Box {
     Row(verticalAlignment = Alignment.CenterVertically) {
         if (isToday) {
                     Box(
@@ -3535,9 +4718,9 @@ fun HabitCard(
                                             .background(Color.White.copy(alpha = 0.18f))
                                             .padding(horizontal = 6.dp, vertical = 2.dp)
                                     ) {
-                                        Text("🔥", fontSize = 12.sp)
+                                        Icon(Icons.Default.LocalFireDepartment, contentDescription = null, tint = Color(0xFFFF9800), modifier = Modifier.size(14.dp))
                                         Spacer(Modifier.width(2.dp))
-                                        Text("$streakCount", color = textColor, fontSize = 12.sp, fontWeight = FontWeight.Bold)
+                                        Text("x$streakCount", color = textColor, fontSize = 12.sp, fontWeight = FontWeight.Bold)
                                     }
                                 }
                             }
@@ -3602,6 +4785,10 @@ fun HabitCard(
                 }
             }
         }
+    }
+    if (confettiTrigger != 0L) {
+        CardPopperBurst(trigger = confettiTrigger, originXDp = 11.dp)
+    }
     }
 }
 
@@ -4306,8 +5493,14 @@ suspend fun renderPdfThumbnail(path: String): Bitmap? = withContext(Dispatchers.
     }
 }
 
+val pdfRenderSemaphore = kotlinx.coroutines.sync.Semaphore(2)
+
 object PdfThumbnailCache {
-    private val cache = android.util.LruCache<Long, Bitmap>(60)
+    private val cache = object : android.util.LruCache<Long, Bitmap>(
+        (Runtime.getRuntime().maxMemory() / 1024 / 16).toInt()
+    ) {
+        override fun sizeOf(key: Long, value: Bitmap): Int = value.byteCount / 1024
+    }
 
     fun get(pdfId: Long): Bitmap? = cache.get(pdfId)
 
@@ -4328,7 +5521,7 @@ object PdfThumbnailDiskCache {
     }
 
     suspend fun get(context: Context, pdfId: Long): Bitmap? = withContext(Dispatchers.IO) {
-        val file = File(dir(context), "$pdfId.png")
+        val file = File(dir(context), "$pdfId.jpg")
         if (!file.exists()) return@withContext null
         try {
             android.graphics.BitmapFactory.decodeFile(file.absolutePath)
@@ -4340,7 +5533,7 @@ object PdfThumbnailDiskCache {
     }
 
     fun getSync(context: Context, pdfId: Long): Bitmap? {
-        val file = File(dir(context), "$pdfId.png")
+        val file = File(dir(context), "$pdfId.jpg")
         if (!file.exists()) return null
         return try {
             android.graphics.BitmapFactory.decodeFile(file.absolutePath)
@@ -4351,8 +5544,8 @@ object PdfThumbnailDiskCache {
 
     suspend fun put(context: Context, pdfId: Long, bitmap: Bitmap): Unit = withContext(Dispatchers.IO) {
         try {
-            java.io.FileOutputStream(File(dir(context), "$pdfId.png")).use { out ->
-                bitmap.compress(Bitmap.CompressFormat.PNG, 90, out)
+            java.io.FileOutputStream(File(dir(context), "$pdfId.jpg")).use { out ->
+                bitmap.compress(Bitmap.CompressFormat.JPEG, 85, out)
             }
         } catch (e: kotlinx.coroutines.CancellationException) {
             throw e
@@ -4405,7 +5598,7 @@ fun PdfsScreen(
     var folders by PdfsScreenState.folders
     var folderAssignments by PdfsScreenState.folderAssignments
     var hasLoadedOnce by PdfsScreenState.hasLoadedOnce
-    var openFolder by remember { mutableStateOf<String?>(null) }
+    var openFolder by rememberSaveable { mutableStateOf<String?>(null) }
     var sortOption by remember { mutableStateOf(defaultSortOption) }
     LaunchedEffect(sortOption) { onSortOptionPersist(sortOption) }
     var showSortMenu by remember { mutableStateOf(false) }
@@ -4415,8 +5608,8 @@ fun PdfsScreen(
     var renameTarget by remember { mutableStateOf<PdfFile?>(null) }
     var deleteTarget by remember { mutableStateOf<PdfFile?>(null) }
     var moveTarget by remember { mutableStateOf<PdfFile?>(null) }
-    var isSearching by remember { mutableStateOf(false) }
-    var searchQuery by remember { mutableStateOf("") }
+    var isSearching by rememberSaveable { mutableStateOf(false) }
+    var searchQuery by rememberSaveable { mutableStateOf("") }
     val searchFocusRequester = remember { FocusRequester() }
 
     LaunchedEffect(hasPermission) {
@@ -4433,15 +5626,19 @@ fun PdfsScreen(
                 folderAssignments = PdfFolderAssignmentStorage.load(context)
 
                 val freshList = loadDevicePdfs(context)
-                pdfs = freshList
-                PdfListCacheStorage.save(context, freshList)
+                if (freshList != pdfs) {
+                    pdfs = freshList
+                    PdfListCacheStorage.save(context, freshList)
+                }
                 isLoading = false
                 hasLoadedOnce = true
             } else if (autoScanEnabled) {
 
                 val freshList = loadDevicePdfs(context)
-                pdfs = freshList
-                PdfListCacheStorage.save(context, freshList)
+                if (freshList != pdfs) {
+                    pdfs = freshList
+                    PdfListCacheStorage.save(context, freshList)
+                }
             }
         }
     }
@@ -4458,6 +5655,9 @@ fun PdfsScreen(
 
     val sortedFolders = remember(folders, isSearching) {
         if (isSearching) emptyList() else folders.sortedBy { it.lowercase() }
+    }
+    val folderCounts = remember(folderAssignments) {
+        folderAssignments.values.groupingBy { it }.eachCount()
     }
     val displayedPdfs = remember(pdfs, folderAssignments, openFolder, sortOption, isSearching, searchQuery) {
         val base = if (isSearching) {
@@ -4726,11 +5926,11 @@ fun PdfsScreen(
             }
         } else {
             Row(
-                modifier = Modifier.fillMaxWidth(),
+                modifier = Modifier.fillMaxWidth().height(48.dp),
                 horizontalArrangement = Arrangement.SpaceBetween,
                 verticalAlignment = Alignment.CenterVertically
             ) {
-                Text("PDFs", color = Color.White, fontSize = 28.sp, fontWeight = FontWeight.Bold)
+                Text("PDFs", color = Color.White, fontSize = 28.sp, fontWeight = FontWeight.ExtraBold)
                 Row(verticalAlignment = Alignment.CenterVertically) {
                     Icon(
                         Icons.Default.CreateNewFolder,
@@ -4923,10 +6123,10 @@ fun PdfsScreen(
                     contentPadding = PaddingValues(bottom = bottomContentPadding + 12.dp)
                 ) {
                     if (openFolder == null) {
-                        items(sortedFolders) { folderName ->
+                        items(sortedFolders, key = { it }) { folderName ->
                             FolderRow(
                                 name = folderName,
-                                count = folderAssignments.values.count { it == folderName },
+                                count = folderCounts[folderName] ?: 0,
                                 onClick = { openFolder = folderName }
                             )
                             Spacer(Modifier.height(12.dp))
@@ -5412,16 +6612,23 @@ fun PdfRow(
 
     val context = LocalContext.current
     var thumbnail by remember(pdf.id) {
-        mutableStateOf(
-            PdfThumbnailCache.get(pdf.id) ?: PdfThumbnailDiskCache.getSync(context, pdf.id)?.also {
-                PdfThumbnailCache.put(pdf.id, it)
-            }
-        )
+        mutableStateOf(PdfThumbnailCache.get(pdf.id))
     }
 
     LaunchedEffect(pdf.id) {
         if (thumbnail != null) return@LaunchedEffect
-        val bmp = renderPdfThumbnail(pdf.path)
+        val fromDisk = PdfThumbnailDiskCache.get(context, pdf.id)
+        if (fromDisk != null) {
+            PdfThumbnailCache.put(pdf.id, fromDisk)
+            thumbnail = fromDisk
+            return@LaunchedEffect
+        }
+        pdfRenderSemaphore.acquire()
+        val bmp = try {
+            renderPdfThumbnail(pdf.path)
+        } finally {
+            pdfRenderSemaphore.release()
+        }
         if (bmp != null) {
             PdfThumbnailCache.put(pdf.id, bmp)
             PdfThumbnailDiskCache.put(context, pdf.id, bmp)
@@ -5513,7 +6720,7 @@ fun PdfRow(
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
-fun AddHabitScreen(existingHabit: Habit?, onBack: () -> Unit, onSave: (Habit) -> Unit, onDelete: () -> Unit) {
+fun AddHabitScreen(existingHabit: Habit?, onBack: () -> Unit, onSave: (Habit) -> Unit, onDelete: () -> Unit, initialStartDate: LocalDate = LocalDate.now()) {
     val context = LocalContext.current
     var name by remember { mutableStateOf(existingHabit?.name ?: "") }
     var iconEmoji by remember { mutableStateOf(existingHabit?.iconEmoji ?: "🙂") }
@@ -5553,7 +6760,7 @@ fun AddHabitScreen(existingHabit: Habit?, onBack: () -> Unit, onSave: (Habit) ->
                 title = { Text(if (existingHabit != null) "Edit Habit" else "New Habit", color = Color.White) },
                 navigationIcon = {
                     IconButton(onClick = onBack) {
-                        Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = "Back", tint = Color.White)
+                        Icon(Icons.Default.ChevronLeft, contentDescription = "Back", tint = Color.White)
                     }
                 },
                 actions = {
@@ -5836,7 +7043,7 @@ when (endMode) {
                     endMode = endMode,
                     endDate = if (endMode == EndMode.DATE) endDate else null,
                     endAfterDays = if (endMode == EndMode.DAYS) endAfterDays else null,
-                    createdAt = existingHabit?.createdAt ?: LocalDate.now()
+                    createdAt = existingHabit?.createdAt ?: initialStartDate
                 )
             )
         }
