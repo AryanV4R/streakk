@@ -5,7 +5,10 @@ import android.app.Activity
 import android.content.Context
 import android.content.Intent
 import android.content.pm.PackageManager
-import android.net.Uri
+import androidx.core.content.edit
+import androidx.core.net.toUri
+import androidx.compose.runtime.mutableLongStateOf
+import kotlin.time.Duration.Companion.milliseconds
 import android.os.Build
 import android.provider.Settings
 import androidx.activity.compose.BackHandler
@@ -74,7 +77,13 @@ fun AppRoot() {
     var dialogWantsNotifications by remember { mutableStateOf(false) }
     var dialogWantsStorage by remember { mutableStateOf(false) }
     var pendingPermissionAction by remember { mutableStateOf<String?>(null) }
-    var showCoachMarks by remember { mutableStateOf(false) }
+    var showOnboarding by remember {
+        val onboardingPrefs = context.getSharedPreferences("habit_prefs", Context.MODE_PRIVATE)
+        mutableStateOf(
+            !onboardingPrefs.getBoolean("onboarding_done", false) &&
+                !SettingsStorage.hasSeenTutorial(context)
+        )
+    }
 
     fun checkAndShowPermissionDialog() {
         val needsNotifications = Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU &&
@@ -89,9 +98,7 @@ fun AppRoot() {
 
     LaunchedEffect(Unit) {
 
-        if (!SettingsStorage.hasSeenTutorial(context)) {
-            showCoachMarks = true
-        } else {
+        if (!showOnboarding) {
             checkAndShowPermissionDialog()
         }
         withContext(Dispatchers.Default) { HabitReminderScheduler.rescheduleAll(context) }
@@ -100,9 +107,9 @@ fun AppRoot() {
     LaunchedEffect(pendingPermissionAction) {
         when (pendingPermissionAction) {
             "notifications" -> {
-                delay(300)
+                delay(300.milliseconds)
                 context.getSharedPreferences("habit_prefs", Context.MODE_PRIVATE)
-                    .edit().putBoolean("notif_permission_requested", true).apply()
+                    .edit { putBoolean("notif_permission_requested", true) }
 
                 val activity = context as? Activity
                 if (activity != null && Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
@@ -116,24 +123,13 @@ fun AppRoot() {
             }
 
             "storage" -> {
-                delay(300)
-                if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.R) {
-                    val intent = Intent(
-                        Settings.ACTION_MANAGE_APP_ALL_FILES_ACCESS_PERMISSION,
-                        Uri.parse("package:${context.packageName}")
-                    )
+                delay(300.milliseconds)
+                val intent = Intent(
+                    Settings.ACTION_MANAGE_APP_ALL_FILES_ACCESS_PERMISSION,
+                    "package:${context.packageName}".toUri()
+                )
 
-                    context.startActivity(intent)
-                } else {
-                    val activity = context as? Activity
-                    if (activity != null) {
-                        ActivityCompat.requestPermissions(
-                            activity,
-                            arrayOf(Manifest.permission.READ_EXTERNAL_STORAGE),
-                            9002
-                        )
-                    }
-                }
+                context.startActivity(intent)
                 pendingPermissionAction = null
             }
 
@@ -256,7 +252,7 @@ fun AppRoot() {
     var appLockEnabled by remember { mutableStateOf(SettingsStorage.loadAppLockEnabled(context)) }
     var autoLockTimeout by remember { mutableStateOf(SettingsStorage.loadAutoLockTimeout(context)) }
     var isAppUnlocked by remember { mutableStateOf(!SettingsStorage.loadAppLockEnabled(context)) }
-    var lastBackgroundedAt by remember { mutableStateOf(0L) }
+    var lastBackgroundedAt by remember { mutableLongStateOf(0L) }
     val lifecycleOwner = LocalLifecycleOwner.current
 
     val previousTodos = remember { ConcurrentHashMap<Long, HomeTodoItem>() }
@@ -279,21 +275,21 @@ fun AppRoot() {
 
     LaunchedEffect(Unit) {
         snapshotFlow { habits.toList() }.collectLatest { snapshot ->
-            delay(300)
+            delay(300.milliseconds)
             withContext(Dispatchers.IO) { HabitStorage.save(context, snapshot) }
         }
     }
 
     LaunchedEffect(Unit) {
         snapshotFlow { todos.toList() }.collectLatest { snapshot ->
-            delay(300)
+            delay(300.milliseconds)
             withContext(Dispatchers.IO) { persistTodos(snapshot) }
         }
     }
 
     LaunchedEffect(Unit) {
         snapshotFlow { habitStatus.toMap() }.collectLatest { snapshot ->
-            delay(300)
+            delay(300.milliseconds)
             withContext(Dispatchers.IO) { HabitStorage.saveStatus(context, snapshot) }
         }
     }
@@ -506,16 +502,7 @@ fun AppRoot() {
                                                 bottomContentPadding = padding.calculateBottomPadding(),
                                                 firstDayOfWeek = firstDayOfWeek,
                                                 showStreakCount = showStreakCount,
-                                                soundOnComplete = soundOnComplete,
-                                                showCoachMarks = showCoachMarks,
-                                                onCoachMarksDismissed = {
-                                                    showCoachMarks = false
-                                                    SettingsStorage.setHasSeenTutorial(
-                                                        context,
-                                                        true
-                                                    )
-                                                    checkAndShowPermissionDialog()
-                                                }
+                                                soundOnComplete = soundOnComplete
                                             )
 
                                             Screen.PDFS -> PdfsScreen(
@@ -599,5 +586,14 @@ fun AppRoot() {
             onDismiss = { showHabitLimitBanner = false },
             modifier = Modifier.align(Alignment.TopCenter)
         )
+        if (showOnboarding) {
+            OnboardingScreen(
+                onFinished = {
+                    context.getSharedPreferences("habit_prefs", Context.MODE_PRIVATE)
+                        .edit { putBoolean("onboarding_done", true) }
+                    showOnboarding = false
+                }
+            )
+        }
     }
 }

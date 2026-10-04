@@ -86,7 +86,6 @@ import androidx.compose.animation.ExperimentalAnimationApi
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.platform.LocalConfiguration
-import androidx.compose.ui.platform.LocalWindowInfo
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.sp
 import androidx.compose.ui.window.Dialog
@@ -95,7 +94,6 @@ import androidx.compose.foundation.pager.HorizontalPager
 import androidx.compose.foundation.pager.rememberPagerState
 import androidx.compose.foundation.gestures.detectHorizontalDragGestures
 import androidx.compose.ui.input.pointer.pointerInput
-import kotlin.math.sqrt
 import kotlin.math.cos
 import kotlin.math.sin
 import androidx.compose.ui.text.style.TextAlign
@@ -112,12 +110,9 @@ import java.time.LocalDateTime
 import java.time.ZoneId
 import java.util.Locale
 import androidx.compose.ui.geometry.Offset
-import androidx.compose.ui.geometry.Rect
 import androidx.compose.ui.geometry.Size
 import androidx.compose.ui.layout.onGloballyPositioned
-import androidx.compose.ui.layout.boundsInRoot
 import androidx.compose.ui.layout.layout
-import androidx.compose.foundation.gestures.detectTapGestures
 import androidx.compose.ui.input.nestedscroll.NestedScrollConnection
 import androidx.compose.ui.input.nestedscroll.NestedScrollSource
 import androidx.compose.ui.input.nestedscroll.nestedScroll
@@ -186,7 +181,6 @@ import androidx.compose.ui.graphics.asImageBitmap
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.foundation.Canvas
 import androidx.compose.ui.graphics.StrokeCap
-import androidx.compose.ui.graphics.Path
 import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.graphics.drawscope.rotate
 import androidx.compose.material.icons.filled.CreateNewFolder
@@ -904,9 +898,11 @@ fun TopBanner(
 
 @Composable
 fun BottomNavBar(current: Screen, onSelect: (Screen) -> Unit) {
+    val navBarContentHeight = 56.dp
+    val bottomInset = WindowInsets.navigationBars.asPaddingValues().calculateBottomPadding()
     NavigationBar(
         containerColor = Color(0xFF1C1D24),
-        modifier = Modifier.height(64.dp)
+        modifier = Modifier.height(navBarContentHeight + bottomInset)
     ) {
         NavigationBarItem(
             selected = current == Screen.HOME,
@@ -1908,7 +1904,7 @@ fun SettingsScreen(
 
             Spacer(Modifier.height(20.dp))
             Text(
-                "Version 0.0.1",
+                "Version 1.1.0",
                 color = TextGray,
                 fontSize = 13.sp,
                 modifier = Modifier.fillMaxWidth(),
@@ -2427,11 +2423,8 @@ fun TasksScreen(
     bottomContentPadding: Dp = 0.dp,
     firstDayOfWeek: DayOfWeek = DayOfWeek.MONDAY,
     showStreakCount: Boolean = true,
-    soundOnComplete: Boolean = true,
-    showCoachMarks: Boolean = false,
-    onCoachMarksDismissed: () -> Unit = {}
+    soundOnComplete: Boolean = true
 ) {
-    var topAddButtonRect by remember { mutableStateOf<Rect?>(null) }
     val density = LocalDensity.current
     var headerHeight by remember { mutableStateOf(0.dp) }
     val today = remember { LocalDate.now() }
@@ -2519,8 +2512,7 @@ fun TasksScreen(
                 Text(titleText, color = Color.White, fontSize = 28.sp, fontWeight = FontWeight.ExtraBold)
                 if (!selectedDate.isBefore(today)) {
                     IconButton(
-                        onClick = { onAddHabit(selectedDate) },
-                        modifier = Modifier.onGloballyPositioned { coordinates -> topAddButtonRect = coordinates.boundsInRoot() }
+                        onClick = { onAddHabit(selectedDate) }
                     ) {
                         Icon(
                             Icons.Default.Add,
@@ -2841,20 +2833,6 @@ fun TasksScreen(
                 Text("Today", color = Color.White, fontWeight = FontWeight.Bold, fontSize = 16.sp)
             }
         }
-
-        if (showCoachMarks) {
-            val targetRect = topAddButtonRect
-            if (targetRect != null) {
-                CoachMarkOverlay(
-                    targetRect = targetRect,
-                    stepLabel = "Tip",
-                    title = "Add button",
-                    description = "Tap it to create a new habit.",
-                    isLastStep = true,
-                    onNext = { onCoachMarksDismissed() }
-                )
-            }
-        }
     }
 }
 
@@ -3096,145 +3074,7 @@ fun HabitOptionsSheet(
         }
     }
 }
-@Composable
-fun CoachMarkOverlay(
-    targetRect: Rect,
-    stepLabel: String,
-    title: String,
-    description: String,
-    isLastStep: Boolean,
-    onNext: () -> Unit
-) {
-    val density = LocalDensity.current
-    val windowInfo = LocalWindowInfo.current
-    val screenHeightPx = windowInfo.containerSize.height.toFloat()
 
-    val centerX = targetRect.center.x
-    val centerY = targetRect.center.y
-    val targetRadius = (maxOf(targetRect.width, targetRect.height) / 2f) + with(density) { 6.dp.toPx() }
-
-    val showCalloutAbove = centerY > screenHeightPx / 2f
-    var calloutRect by remember { mutableStateOf<Rect?>(null) }
-
-    val gapAbovePx = with(density) { 45.dp.toPx() }
-    val gapBelowPx = with(density) { 45.dp.toPx() }
-    val minY = with(density) { 24.dp.toPx() }
-
-    val knownCalloutHeightPx = calloutRect?.height ?: with(density) { 260.dp.toPx() }
-    val maxY = screenHeightPx - knownCalloutHeightPx - with(density) { 24.dp.toPx() }
-    val calloutYPx = if (showCalloutAbove) {
-        (targetRect.top - gapAbovePx - knownCalloutHeightPx).coerceIn(minY, maxY)
-    } else {
-        (targetRect.bottom + gapBelowPx).coerceIn(minY, maxY)
-    }
-    val calloutY = with(density) { calloutYPx.toDp() }
-
-    Box(modifier = Modifier.fillMaxSize()) {
-        Canvas(
-            modifier = Modifier
-                .fillMaxSize()
-                .pointerInput(Unit) { detectTapGestures {  } }
-        ) {
-            drawRect(color = Color.Black.copy(alpha = 0.78f))
-        }
-
-        Column(
-            modifier = Modifier
-                .offset(x = 20.dp, y = calloutY)
-                .width(280.dp)
-                .onGloballyPositioned { coordinates -> calloutRect = coordinates.boundsInRoot() }
-                .clip(RoundedCornerShape(16.dp))
-                .background(CardBg)
-                .padding(18.dp)
-        ) {
-            Text(stepLabel, color = BlueAccent, fontSize = 12.sp, fontWeight = FontWeight.Bold)
-            Spacer(Modifier.height(6.dp))
-            Text(title, color = Color.White, fontSize = 16.sp, fontWeight = FontWeight.Bold)
-            Spacer(Modifier.height(4.dp))
-            Text(description, color = TextGray, fontSize = 13.sp, lineHeight = 18.sp)
-            Spacer(Modifier.height(14.dp))
-            Box(
-                modifier = Modifier
-                    .align(Alignment.End)
-                    .clip(RoundedCornerShape(50))
-                    .background(BlueAccent)
-                    .clickable { onNext() }
-                    .padding(horizontal = 20.dp, vertical = 10.dp)
-            ) {
-                Text(if (isLastStep) "Got it" else "Next", color = Color.White, fontWeight = FontWeight.Bold, fontSize = 13.sp)
-            }
-        }
-
-        calloutRect?.let { box ->
-            Canvas(modifier = Modifier.fillMaxSize()) {
-                val targetCenter = Offset(centerX, centerY)
-                val boxCenter = box.center
-                val startX = if (targetCenter.x >= boxCenter.x) box.right else box.left
-                val startY = if (targetCenter.y >= boxCenter.y) box.bottom else box.top
-
-                val start = if (showCalloutAbove) {
-                    Offset(box.right, box.top + box.height * 0.55f)
-                } else {
-                    Offset(startX, startY)
-                }
-
-                val end = if (showCalloutAbove) {
-
-                    Offset(targetCenter.x, targetCenter.y - targetRadius - with(density) { 14.dp.toPx() })
-                } else {
-                    val dx = targetCenter.x - start.x
-                    val dy = targetCenter.y - start.y
-                    val dist = sqrt(dx * dx + dy * dy).coerceAtLeast(1f)
-                    Offset(
-                        targetCenter.x - (dx / dist) * targetRadius,
-                        targetCenter.y - (dy / dist) * targetRadius
-                    )
-                }
-
-                val control = if (showCalloutAbove) {
-                    Offset(end.x, start.y)
-                } else {
-                    val midX = (start.x + end.x) / 2f
-                    val midY = (start.y + end.y) / 2f
-                    val perpX = -(end.y - start.y)
-                    val perpY = (end.x - start.x)
-                    val perpLen = sqrt(perpX * perpX + perpY * perpY).coerceAtLeast(1f)
-                    val curveAmount = 36.dp.toPx()
-                    Offset(
-                        midX + (perpX / perpLen) * curveAmount,
-                        midY + (perpY / perpLen) * curveAmount
-                    )
-                }
-
-                val arrowPath = Path().apply {
-                    moveTo(start.x, start.y)
-                    quadraticTo(control.x, control.y, end.x, end.y)
-                }
-                drawPath(
-                    path = arrowPath,
-                    color = Color.White,
-                    style = Stroke(width = 3.dp.toPx(), cap = StrokeCap.Round)
-                )
-
-                val tangentX = end.x - control.x
-                val tangentY = end.y - control.y
-                val tangentLen = sqrt(tangentX * tangentX + tangentY * tangentY).coerceAtLeast(1f)
-                val ux = tangentX / tangentLen
-                val uy = tangentY / tangentLen
-                val arrowLength = 16.dp.toPx()
-                val angle = Math.toRadians(28.0)
-
-                val leftX = end.x - arrowLength * (ux * cos(angle) - uy * sin(angle)).toFloat()
-                val leftY = end.y - arrowLength * (uy * cos(angle) + ux * sin(angle)).toFloat()
-                val rightX = end.x - arrowLength * (ux * cos(-angle) - uy * sin(-angle)).toFloat()
-                val rightY = end.y - arrowLength * (uy * cos(-angle) + ux * sin(-angle)).toFloat()
-
-                drawLine(Color.White, end, Offset(leftX, leftY), strokeWidth = 3.dp.toPx(), cap = StrokeCap.Round)
-                drawLine(Color.White, end, Offset(rightX, rightY), strokeWidth = 3.dp.toPx(), cap = StrokeCap.Round)
-            }
-        }
-    }
-}
 @Composable
 fun SkipConfirmDialog(onDismiss: () -> Unit, onConfirm: () -> Unit) {
     Dialog(onDismissRequest = onDismiss) {

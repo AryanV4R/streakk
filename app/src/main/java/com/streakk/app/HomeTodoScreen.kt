@@ -126,9 +126,6 @@ fun QuickAddTodoSheet(
         withFrameNanos {}
         withFrameNanos {}
         hasEntered = true
-        // Fixed delay ki jagah actual animated value ka wait — isse koi bhi
-        // frame-drop/system-slowdown ho, keyboard tabhi request hoga jab popup
-        // GENUINELY visually itna aage badh chuka ho, kabhi time-drift se nahi.
         snapshotFlow { enterProgress }.first { it >= 0.999f }
         repeat(20) {
             try {
@@ -163,11 +160,7 @@ fun QuickAddTodoSheet(
             var lastImeHeight = imeInsets.getBottom(imeDensity)
             var peakImeHeight = 0
             var keyboardHasRisen = false
-            // Pehle 8dp tha — bahut tight tha, IME ki apni opening-animation
-            // aur suggestion-strip jitter isse hi easily trigger ho jaata tha.
             val closeTolerancePx = with(imeDensity) { 24.dp.toPx() }
-            // Keyboard khulne/focus-retry ke shuruaati hangame (animation +
-            // focus-acquisition race) ko poori tarah ignore karo.
             val openSettleMillis = 500L
             val startTime = System.currentTimeMillis()
             var dismissJob: Job? = null
@@ -184,15 +177,10 @@ fun QuickAddTodoSheet(
                                 dismissJob = null
                             }
                             imeHeight >= peakImeHeight - closeTolerancePx -> {
-                                // Tolerance ke andar hai — healthy, koi pending dismiss cancel karo
                                 dismissJob?.cancel()
                                 dismissJob = null
                             }
                             else -> {
-                                // Peak se kaafi neeche — ho sakta hai genuine close ho, ya sirf
-                                // ek transient dip ho. Turant dismiss karne ke bajaye, 180ms
-                                // wait karo; agar is dauraan height wapas upar aa jaaye,
-                                // upar wale branches isko cancel kar denge.
                                 if (dismissJob == null &&
                                     System.currentTimeMillis() - startTime > openSettleMillis
                                 ) {
