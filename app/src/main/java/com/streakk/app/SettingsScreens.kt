@@ -67,7 +67,7 @@ fun PrivacyPolicyScreen(onBack: () -> Unit, bottomContentPadding: Dp = 0.dp) {
             )
         }
         Spacer(Modifier.height(8.dp))
-        Text("Last updated: September 2026", color = TextGray, fontSize = 13.sp)
+        Text("Last updated: October 2026", color = TextGray, fontSize = 13.sp)
         Spacer(Modifier.height(24.dp))
 
         sectionBody(
@@ -87,13 +87,22 @@ fun PrivacyPolicyScreen(onBack: () -> Unit, bottomContentPadding: Dp = 0.dp) {
             "Your habits, streaks, to-do tasks, and app preferences are saved locally on your device using " +
                     "Android's standard app storage. This data is only readable by Streakk and is removed " +
                     "automatically if you uninstall the app, or manually at any time using \"Delete all data\" " +
-                    "in Settings."
+                    "in Settings. Streakk also automatically saves up to three recent backup copies of your " +
+                    "habits, tasks and settings as files in the Documents/Streakk folder on your device, so you " +
+                    "can restore them after reinstalling the app. These files are not sent anywhere by Streakk " +
+                    "and are not removed when you uninstall the app; like any file in your Documents folder, " +
+                    "they may be visible to other apps you have given file access to. You can turn this off in " +
+                    "Settings → Backup & restore. You can also export your data to a file using \"Export data\" and import it " +
+                    "again later; that file is saved wherever you choose, stays under your control, and is " +
+                    "never sent anywhere by Streakk. If Android's device backup is turned on, Android may also " +
+                    "keep an encrypted copy of this data in your own Google account."
         )
 
         sectionTitle("3. Permissions")
         sectionBody(
-            "Streakk requests storage access solely to let you browse and open PDF files that already " +
-                    "exist on your device. We do not read, copy, or upload any file contents — the app simply " +
+            "Streakk requests storage access to let you browse and open PDF files that already " +
+                    "exist on your device, and to save and read the backup copies of your own Streakk data " +
+                    "in your Documents/Streakk folder. We do not read, copy, or upload the contents of your PDF files — the app simply " +
                     "displays files you choose to open. If you enable habit or task reminders, they are scheduled locally " +
                     "on your device and are never sent anywhere."
         )
@@ -116,7 +125,10 @@ fun PrivacyPolicyScreen(onBack: () -> Unit, bottomContentPadding: Dp = 0.dp) {
         sectionTitle("6. Your Control Over Your Data")
         sectionBody(
             "Since all data lives only on your device, you are always in full control of it. You can " +
-                    "erase everything at any time from Settings → Delete all data, or by uninstalling the app."
+                    "erase everything at any time from Settings → Delete all data, which also removes the " +
+                    "backup copies Streakk saved. Uninstalling the app removes its private data, but backup " +
+                    "files in your Documents/Streakk folder stay on your device until you delete them yourself. " +
+                    "You can turn off automatic backups at any time in Settings → Backup & restore."
         )
 
         sectionTitle("7. Changes to This Policy")

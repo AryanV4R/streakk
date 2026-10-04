@@ -130,6 +130,33 @@ object SettingsStorage {
             .apply()
     }
 
+    private const val KEY_AUTO_BACKUP_ENABLED = "auto_backup_enabled"
+    private const val KEY_LAST_BACKUP_AT = "last_backup_at"
+
+    fun loadAutoBackupEnabled(context: Context): Boolean {
+        return context.getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE)
+            .getBoolean(KEY_AUTO_BACKUP_ENABLED, true)
+    }
+
+    fun saveAutoBackupEnabled(context: Context, value: Boolean) {
+        context.getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE)
+            .edit()
+            .putBoolean(KEY_AUTO_BACKUP_ENABLED, value)
+            .apply()
+    }
+
+    fun loadLastBackupAt(context: Context): Long {
+        return context.getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE)
+            .getLong(KEY_LAST_BACKUP_AT, 0L)
+    }
+
+    fun saveLastBackupAt(context: Context, millis: Long) {
+        context.getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE)
+            .edit()
+            .putLong(KEY_LAST_BACKUP_AT, millis)
+            .apply()
+    }
+
     fun hasSeenTutorial(context: Context): Boolean {
         return context.getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE)
             .getBoolean("has_seen_tutorial", false)

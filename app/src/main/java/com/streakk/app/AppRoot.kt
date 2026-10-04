@@ -48,6 +48,7 @@ import androidx.compose.runtime.mutableStateListOf
 import androidx.compose.runtime.mutableStateMapOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import androidx.compose.runtime.saveable.rememberSaveableStateHolder
 import androidx.compose.runtime.snapshotFlow
@@ -65,6 +66,7 @@ import androidx.lifecycle.compose.LocalLifecycleOwner
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.collectLatest
+import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 import java.time.LocalDate
 import java.util.concurrent.ConcurrentHashMap
@@ -253,7 +255,10 @@ fun AppRoot() {
     var autoLockTimeout by remember { mutableStateOf(SettingsStorage.loadAutoLockTimeout(context)) }
     var isAppUnlocked by remember { mutableStateOf(!SettingsStorage.loadAppLockEnabled(context)) }
     var lastBackgroundedAt by remember { mutableLongStateOf(0L) }
+    var autoBackupEnabled by remember { mutableStateOf(SettingsStorage.loadAutoBackupEnabled(context)) }
+    var restoreOffer by remember { mutableStateOf<BackupData?>(null) }
     val lifecycleOwner = LocalLifecycleOwner.current
+    val coroutineScope = rememberCoroutineScope()
 
     val previousTodos = remember { ConcurrentHashMap<Long, HomeTodoItem>() }
 
@@ -337,6 +342,62 @@ fun AppRoot() {
         SettingsStorage.saveAutoLockTimeout(context, autoLockTimeout)
     }
 
+    LaunchedEffect(autoBackupEnabled) {
+        SettingsStorage.saveAutoBackupEnabled(context, autoBackupEnabled)
+    }
+    val pendingImport = BackupBridge.pending
+    LaunchedEffect(pendingImport) {
+        val data = pendingImport?.let { imported ->
+            imported.copy(todos = imported.todos.filter { !it.date.isBefore(LocalDate.now().minusDays(10)) })
+        } ?: return@LaunchedEffect
+
+        habits.forEach { HabitReminderScheduler.cancel(context, it.id) }
+        habits.clear()
+        habits.addAll(data.habits)
+        habitStatus.clear()
+        habitStatus.putAll(data.habitStatus)
+        todos.clear()
+        todos.addAll(data.todos)
+
+        firstDayOfWeek = data.firstDayOfWeek
+        showStreakCount = data.showStreakCount
+        soundOnComplete = data.soundOnComplete
+        defaultSortOption = data.defaultSortOption
+        autoScanEnabled = data.autoScanEnabled
+        fileSizeUnit = data.fileSizeUnit
+
+        PdfsScreenState.folders.value = data.pdfFolders
+        PdfsScreenState.folderAssignments.value = data.pdfFolderAssignments
+
+        withContext(Dispatchers.IO) {
+            HabitStorage.save(context, data.habits)
+            HabitStorage.saveStatus(context, data.habitStatus)
+            persistTodos(data.todos)
+            PdfFolderStorage.save(context, data.pdfFolders)
+            PdfFolderAssignmentStorage.save(context, data.pdfFolderAssignments)
+        }
+
+        data.habits.forEach { habit ->
+            if (habit.notificationsEnabled && habit.startTime != null) {
+                HabitReminderScheduler.schedule(context, habit)
+            }
+        }
+        BackupBridge.pending = null
+    }
+    LaunchedEffect(showOnboarding) {
+        if (showOnboarding) return@LaunchedEffect
+        val restorePrefs = context.getSharedPreferences("habit_prefs", Context.MODE_PRIVATE)
+        if (restorePrefs.getBoolean("restore_offer_done", false)) return@LaunchedEffect
+        if (habits.isNotEmpty() || todos.isNotEmpty()) {
+            restorePrefs.edit { putBoolean("restore_offer_done", true) }
+            return@LaunchedEffect
+        }
+        if (!hasStorageAccess(context)) return@LaunchedEffect
+        val found = withContext(Dispatchers.IO) { BackupManager.findLatestAutoBackup() }
+        restoreOffer = found
+            ?.let { it.copy(todos = it.todos.filter { t -> !t.date.isBefore(LocalDate.now().minusDays(10)) }) }
+            ?.takeIf { it.habits.isNotEmpty() || it.todos.isNotEmpty() }
+    }
     DisposableEffect(lifecycleOwner, appLockEnabled, autoLockTimeout) {
         val lockObserver = LifecycleEventObserver { _, event ->
             when (event) {
@@ -344,6 +405,13 @@ fun AppRoot() {
                     HabitStorage.save(context, habits.toList())
                     HabitStorage.saveStatus(context, habitStatus.toMap())
                     persistTodos(todos.toList())
+                    if (autoBackupEnabled && hasStorageAccess(context)) {
+                        coroutineScope.launch(Dispatchers.IO) {
+                            if (BackupManager.writeAutoBackup(context)) {
+                                SettingsStorage.saveLastBackupAt(context, System.currentTimeMillis())
+                            }
+                        }
+                    }
                     if (appLockEnabled) {
                         lastBackgroundedAt = System.currentTimeMillis()
                     }
@@ -520,6 +588,10 @@ fun AppRoot() {
                                                     habitStatus.clear()
                                                     todos.clear()
                                                     showDeleteAllBanner = true
+                                                    coroutineScope.launch(Dispatchers.IO) {
+                                                        BackupManager.deleteAllBackups(context)
+                                                        SettingsStorage.saveLastBackupAt(context, 0L)
+                                                    }
                                                 },
                                                 bottomContentPadding = padding.calculateBottomPadding(),
                                                 firstDayOfWeek = firstDayOfWeek,
@@ -543,7 +615,9 @@ fun AppRoot() {
                                                 appLockEnabled = appLockEnabled,
                                                 onAppLockEnabledChange = { appLockEnabled = it },
                                                 autoLockTimeout = autoLockTimeout,
-                                                onAutoLockTimeoutChange = { autoLockTimeout = it }
+                                                onAutoLockTimeoutChange = { autoLockTimeout = it },
+                                                autoBackupEnabled = autoBackupEnabled,
+                                                onAutoBackupEnabledChange = { autoBackupEnabled = it }
                                             )
                                         }
                                     }
@@ -586,6 +660,40 @@ fun AppRoot() {
             onDismiss = { showHabitLimitBanner = false },
             modifier = Modifier.align(Alignment.TopCenter)
         )
+        restoreOffer?.let { offer ->
+            AlertDialog(
+                onDismissRequest = { },
+                title = { Text("Backup found") },
+                text = {
+                    Text(
+                        "We found a backup on this phone with ${offer.habits.size} habits and " +
+                            "${offer.todos.size} tasks. Restore it?"
+                    )
+                },
+                confirmButton = {
+                    TextButton(onClick = {
+                        context.getSharedPreferences("habit_prefs", Context.MODE_PRIVATE)
+                            .edit { putBoolean("restore_offer_done", true) }
+                        BackupBridge.pending = offer
+                        restoreOffer = null
+                    }) {
+                        Text("Restore", color = BlueAccent)
+                    }
+                },
+                dismissButton = {
+                    TextButton(onClick = {
+                        context.getSharedPreferences("habit_prefs", Context.MODE_PRIVATE)
+                            .edit { putBoolean("restore_offer_done", true) }
+                        restoreOffer = null
+                    }) {
+                        Text("Skip")
+                    }
+                },
+                containerColor = CardBg,
+                titleContentColor = Color.White,
+                textContentColor = TextGray
+            )
+        }
         if (showOnboarding) {
             OnboardingScreen(
                 onFinished = {

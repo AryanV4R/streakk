@@ -43,6 +43,7 @@ import androidx.compose.material.icons.filled.Lock
 import androidx.compose.material.icons.filled.Shield
 import androidx.compose.material.icons.filled.Fingerprint
 import androidx.compose.material.icons.filled.Settings
+import androidx.compose.material.icons.filled.Save
 import androidx.compose.material.icons.filled.EmojiEmotions
 import androidx.compose.material.icons.filled.Apps
 import androidx.compose.material.icons.filled.WbTwilight
@@ -341,7 +342,7 @@ fun PermissionsRequiredDialog(
                     PermissionRequestRow(
                         icon = Icons.Default.Folder,
                         title = "MANAGE FILES",
-                        description = "So Streakk can find and open your PDF files",
+                        description = "So Streakk can find your PDF files and save backups",
                         onAllow = onAllowStorage
                     )
                 }
@@ -1717,13 +1718,16 @@ fun SettingsScreen(
     appLockEnabled: Boolean = false,
     onAppLockEnabledChange: (Boolean) -> Unit = {},
     autoLockTimeout: AutoLockTimeout = AutoLockTimeout.INSTANT,
-    onAutoLockTimeoutChange: (AutoLockTimeout) -> Unit = {}
+    onAutoLockTimeoutChange: (AutoLockTimeout) -> Unit = {},
+    autoBackupEnabled: Boolean = true,
+    onAutoBackupEnabledChange: (Boolean) -> Unit = {}
 ) {
     var showGeneralSettings by remember { mutableStateOf(false) }
     val context = LocalContext.current
     var showDeleteConfirm by remember { mutableStateOf(false) }
     var showPrivacyPolicy by remember { mutableStateOf(false) }
     var showPermissions by remember { mutableStateOf(false) }
+    var showBackup by remember { mutableStateOf(false) }
 
     AnimatedContent(
         targetState = showGeneralSettings,
@@ -1794,6 +1798,27 @@ fun SettingsScreen(
         if (isPermissions) {
             PermissionsScreen(onBack = { showPermissions = false }, bottomContentPadding = bottomContentPadding)
         } else {
+        AnimatedContent(
+            targetState = showBackup,
+            transitionSpec = {
+                if (targetState) {
+                    (slideInHorizontally(animationSpec = tween(320)) { fullWidth -> fullWidth } + fadeIn(animationSpec = tween(320)))
+                        .togetherWith(slideOutHorizontally(animationSpec = tween(320)) { fullWidth -> -fullWidth / 4 } + fadeOut(animationSpec = tween(320)))
+                } else {
+                    (slideInHorizontally(animationSpec = tween(320)) { fullWidth -> -fullWidth / 4 } + fadeIn(animationSpec = tween(320)))
+                        .togetherWith(slideOutHorizontally(animationSpec = tween(320)) { fullWidth -> fullWidth } + fadeOut(animationSpec = tween(320)))
+                }
+            },
+            label = "backupTransition"
+        ) { isBackup ->
+        if (isBackup) {
+            BackupSettingsScreen(
+                onBack = { showBackup = false },
+                bottomContentPadding = bottomContentPadding,
+                autoBackupEnabled = autoBackupEnabled,
+                onAutoBackupEnabledChange = onAutoBackupEnabledChange
+            )
+        } else {
         Column(
             modifier = Modifier
                 .fillMaxSize()
@@ -1815,6 +1840,13 @@ fun SettingsScreen(
             Spacer(Modifier.height(16.dp))
 
             SettingsCard {
+                SettingsRow(
+                    title = "Backup & restore",
+                    icon = Icons.Default.Save,
+                    iconBg = Color(0xFF3B7BF5),
+                    onClick = { showBackup = true }
+                )
+                HorizontalDivider(color = Color(0xFF3A3B44))
                 SettingsRow(
                     title = "Manage Permissions",
                     icon = Icons.Default.Alarm,
@@ -1918,7 +1950,7 @@ fun SettingsScreen(
                 onDismissRequest = { showDeleteConfirm = false },
                 title = { Text("Delete all data?") },
                 text = {
-                    Text("This will permanently delete all your habits and to-do tasks from this app. Your PDFs will not be affected. This cannot be undone.")
+                    Text("This will permanently delete all your habits and to-do tasks from this app, including any auto backups saved on this phone. Your PDFs will not be affected. This cannot be undone.")
                 },
                 confirmButton = {
                     TextButton(onClick = {
@@ -1935,6 +1967,8 @@ fun SettingsScreen(
                 titleContentColor = Color.White,
                 textContentColor = TextGray
             )
+        }
+        }
         }
         }
         }
@@ -2086,7 +2120,7 @@ fun PermissionsScreen(onBack: () -> Unit, bottomContentPadding: Dp = 0.dp) {
             HorizontalDivider(color = Color(0xFF3A3B44))
             PermissionToggleRow(
                 title = "Storage access",
-                subtitle = "Required to locate PDF files on your device",
+                subtitle = "Required to find PDF files and save backups on your device",
                 checked = storageGranted,
                 onToggle = {
                     if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.R) {
