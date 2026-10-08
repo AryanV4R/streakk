@@ -170,6 +170,7 @@ import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.core.content.ContextCompat
 import androidx.core.graphics.drawable.toBitmap
 import kotlinx.coroutines.Dispatchers
@@ -968,6 +969,8 @@ fun HomeTodoScreen(bottomContentPadding: Dp = 0.dp, firstDayOfWeek: DayOfWeek = 
     var showAddSheet by remember { mutableStateOf(false) }
     var editingTodo by remember { mutableStateOf<HomeTodoItem?>(null) }
     var menuOpenForTodoId by remember { mutableStateOf<Long?>(null) }
+    val context = LocalContext.current
+    var lastTapHintAt by remember { mutableStateOf(0L) }
     val pendingDoneIds = remember { mutableStateListOf<Long>() }
     val leavingIds = remember { mutableStateListOf<Long>() }
     val undoingIds = remember { mutableStateListOf<Long>() }
@@ -981,6 +984,11 @@ fun HomeTodoScreen(bottomContentPadding: Dp = 0.dp, firstDayOfWeek: DayOfWeek = 
     val centerPage = 5000
     val pagerState = rememberPagerState(initialPage = centerPage) { centerPage * 2 }
     val coroutineScope = rememberCoroutineScope()
+    val listState = rememberLazyListState()
+    var scrollToTopTrigger by remember { mutableIntStateOf(0) }
+    LaunchedEffect(scrollToTopTrigger) {
+        if (scrollToTopTrigger > 0) listState.animateScrollToItem(0)
+    }
 
     fun completeTodoWithAnimation(todoId: Long) {
         if (todoId in pendingDoneIds || todoId in undoingIds) return
@@ -1244,10 +1252,43 @@ fun HomeTodoScreen(bottomContentPadding: Dp = 0.dp, firstDayOfWeek: DayOfWeek = 
                     }
             ) {
             LazyColumn(
+                state = listState,
                 modifier = Modifier.fillMaxSize(),
                 contentPadding = PaddingValues(bottom = bottomContentPadding + 100.dp),
                 verticalArrangement = Arrangement.spacedBy(12.dp)
             ) {
+                if (todos.none { it.date == selectedDate }) {
+                    item(key = "empty_state") {
+                        Column(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .padding(top = 48.dp, bottom = 48.dp),
+                            horizontalAlignment = Alignment.CenterHorizontally
+                        ) {
+                            Box(
+                                modifier = Modifier
+                                    .size(72.dp)
+                                    .clip(RoundedCornerShape(20.dp))
+                                    .background(ChipBg),
+                                contentAlignment = Alignment.Center
+                            ) {
+                                Icon(
+                                    Icons.Default.Description,
+                                    contentDescription = null,
+                                    tint = BlueAccent,
+                                    modifier = Modifier.size(32.dp)
+                                )
+                            }
+                            Spacer(Modifier.height(20.dp))
+                            Text(
+                                "Nothing added for this day",
+                                color = TextGray,
+                                fontSize = 15.sp,
+                                textAlign = TextAlign.Center
+                            )
+                        }
+                    }
+                }
                 items(todos.filter { it.date == selectedDate }.sortedBy { it.completed }, key = { "${it.id}-${it.completed}" }) { todo ->
                     val isVisuallyDone = (todo.completed && todo.id !in undoingIds) || todo.id in pendingDoneIds
                     val todoTextColor by animateColorAsState(
@@ -1276,8 +1317,27 @@ fun HomeTodoScreen(bottomContentPadding: Dp = 0.dp, firstDayOfWeek: DayOfWeek = 
                                 .clip(RoundedCornerShape(14.dp))
                                 .background(ChipBg)
                                 .combinedClickable(
-                                    onClick = {},
-                                    onLongClick = { menuOpenForTodoId = todo.id }
+                                    onClick = {
+                                        val now = System.currentTimeMillis()
+                                        if (menuOpenForTodoId == null && now - lastTapHintAt > 2000L) {
+                                            val prefs = context.getSharedPreferences("streakk_hints", Context.MODE_PRIVATE)
+                                            val shown = prefs.getInt("todo_hold_hint_count", 0)
+                                            if (shown < 3) {
+                                                prefs.edit().putInt("todo_hold_hint_count", shown + 1).apply()
+                                                lastTapHintAt = now
+                                                Toast.makeText(
+                                                    context,
+                                                    "Hold a task to edit, delete or move it",
+                                                    Toast.LENGTH_SHORT
+                                                ).show()
+                                            }
+                                        }
+                                    },
+                                    onLongClick = {
+                                        menuOpenForTodoId = todo.id
+                                        context.getSharedPreferences("streakk_hints", Context.MODE_PRIVATE)
+                                            .edit().putInt("todo_hold_hint_count", 3).apply()
+                                    }
                                 )
                                 .padding(16.dp),
                             verticalAlignment = Alignment.CenterVertically
@@ -1399,6 +1459,7 @@ fun HomeTodoScreen(bottomContentPadding: Dp = 0.dp, firstDayOfWeek: DayOfWeek = 
                     }
                 } else {
                     todos.add(0, HomeTodoItem(id = System.currentTimeMillis(), text = text, date = selectedDate, reminderTime = reminderTime))
+                    scrollToTopTrigger++
                 }
                 showAddSheet = false
                 editingTodo = null

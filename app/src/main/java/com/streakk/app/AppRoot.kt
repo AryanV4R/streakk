@@ -264,6 +264,7 @@ fun AppRoot() {
 
     fun persistTodos(snapshot: List<HomeTodoItem>) {
         TodoStorage.save(context, snapshot)
+        TodoWidgetUpdater.refresh(context)
         val currentIds = snapshot.map { it.id }.toSet()
         previousTodos.keys.filter { it !in currentIds }.forEach {
             TodoReminderScheduler.cancel(context, it)
@@ -422,6 +423,17 @@ fun AppRoot() {
                         val elapsed = System.currentTimeMillis() - lastBackgroundedAt
                         if (elapsed >= autoLockTimeout.millis) {
                             isAppUnlocked = false
+                        }
+                    }
+                    // Widget may have changed todos while app was in background
+                    coroutineScope.launch {
+                        val fresh = withContext(Dispatchers.IO) {
+                            TodoStorage.load(context)
+                                .filter { !it.date.isBefore(LocalDate.now().minusDays(10)) }
+                        }
+                        if (fresh != todos.toList()) {
+                            todos.clear()
+                            todos.addAll(fresh)
                         }
                     }
                 }

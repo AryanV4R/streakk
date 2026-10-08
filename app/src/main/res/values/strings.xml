@@ -1,3 +1,7 @@
 <resources>
     <string name="app_name">Streakk</string>
+    <string name="todo_widget_description">Add and complete today\'s tasks</string>
+    <style name="Theme.Streakk.QuickAdd" parent="android:Theme.Translucent.NoTitleBar">
+    <item name="android:windowAnimationStyle">@null</item>
+</style>
 </resources>

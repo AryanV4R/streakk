@@ -40,10 +40,10 @@
         <activity
             android:name=".MainActivity"
             android:exported="true"
-            android:label="@string/app_name"
             android:theme="@style/Theme.STREAKK.Splash"
             android:windowSoftInputMode="adjustResize|stateVisible"
-            android:enableOnBackInvokedCallback="true">
+            android:enableOnBackInvokedCallback="true"
+            tools:targetApi="33">
             <intent-filter>
                 <action android:name="android.intent.action.MAIN" />
 
@@ -61,6 +61,35 @@
                 <action android:name="android.intent.action.BOOT_COMPLETED" />
             </intent-filter>
         </receiver>
+
+        <receiver
+            android:name=".TodoWidgetReceiver"
+            android:exported="true"
+            android:label="Streakk Tasks">
+            <intent-filter>
+                <action android:name="android.appwidget.action.APPWIDGET_UPDATE" />
+            </intent-filter>
+            <meta-data
+                android:name="android.appwidget.provider"
+                android:resource="@xml/todo_widget_info" />
+        </receiver>
+
+        <activity
+            android:name=".QuickAddTodoActivity"
+            android:exported="false"
+            android:theme="@style/Theme.Streakk.QuickAdd"
+            android:taskAffinity=""
+            android:excludeFromRecents="true"
+            android:windowSoftInputMode="adjustResize" />
+
+        <activity
+            android:name=".TodoWidgetConfigActivity"
+            android:exported="true"
+            android:theme="@style/Theme.STREAKK">
+            <intent-filter>
+                <action android:name="android.appwidget.action.APPWIDGET_CONFIGURE" />
+            </intent-filter>
+        </activity>
     </application>
 
 </manifest>
