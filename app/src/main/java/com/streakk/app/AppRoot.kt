@@ -257,6 +257,7 @@ fun AppRoot() {
     var lastBackgroundedAt by remember { mutableLongStateOf(0L) }
     var autoBackupEnabled by remember { mutableStateOf(SettingsStorage.loadAutoBackupEnabled(context)) }
     var restoreOffer by remember { mutableStateOf<BackupData?>(null) }
+    var encryptedRestorePending by remember { mutableStateOf(false) }
     val lifecycleOwner = LocalLifecycleOwner.current
     val coroutineScope = rememberCoroutineScope()
 
@@ -398,6 +399,9 @@ fun AppRoot() {
         restoreOffer = found
             ?.let { it.copy(todos = it.todos.filter { t -> !t.date.isBefore(LocalDate.now().minusDays(10)) }) }
             ?.takeIf { it.habits.isNotEmpty() || it.todos.isNotEmpty() }
+            if (restoreOffer == null) {
+            encryptedRestorePending = withContext(Dispatchers.IO) { BackupManager.hasEncryptedAutoBackup() }
+        }
     }
     DisposableEffect(lifecycleOwner, appLockEnabled, autoLockTimeout) {
         val lockObserver = LifecycleEventObserver { _, event ->
@@ -704,6 +708,27 @@ fun AppRoot() {
                 containerColor = CardBg,
                 titleContentColor = Color.White,
                 textContentColor = TextGray
+            )
+        }
+                if (encryptedRestorePending) {
+            EnterBackupPasswordDialog(
+                onDismiss = {
+                    context.getSharedPreferences("habit_prefs", Context.MODE_PRIVATE)
+                        .edit { putBoolean("restore_offer_done", true) }
+                    encryptedRestorePending = false
+                },
+                onSubmit = { password ->
+                    val data = withContext(Dispatchers.IO) {
+                        BackupManager.restoreEncryptedAutoBackup(context, password)
+                    }
+                    if (data != null) {
+                        context.getSharedPreferences("habit_prefs", Context.MODE_PRIVATE)
+                            .edit { putBoolean("restore_offer_done", true) }
+                        BackupBridge.pending = data
+                        encryptedRestorePending = false
+                    }
+                    data != null
+                }
             )
         }
         if (showOnboarding) {

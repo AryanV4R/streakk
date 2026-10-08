@@ -92,7 +92,10 @@ fun PrivacyPolicyScreen(onBack: () -> Unit, bottomContentPadding: Dp = 0.dp) {
                     "can restore them after reinstalling the app. These files are not sent anywhere by Streakk " +
                     "and are not removed when you uninstall the app; like any file in your Documents folder, " +
                     "they may be visible to other apps you have given file access to. You can turn this off in " +
-                    "Settings → Backup & restore. You can also export your data to a file using \"Export data\" and import it " +
+                    "Settings → Backup & restore. If you turn on \"Encrypt backups\" there, these backup files are " +
+                    "encrypted with a password you choose and cannot be read without it. The password is never sent " +
+                    "anywhere, and if you forget it those backups cannot be recovered. " +
+                    "You can also export your data to a file using \"Export data\" and import it " +
                     "again later; that file is saved wherever you choose, stays under your control, and is " +
                     "never sent anywhere by Streakk. If Android's device backup is turned on, Android may also " +
                     "keep an encrypted copy of this data in your own Google account."
@@ -128,6 +131,8 @@ fun PrivacyPolicyScreen(onBack: () -> Unit, bottomContentPadding: Dp = 0.dp) {
                     "erase everything at any time from Settings → Delete all data, which also removes the " +
                     "backup copies Streakk saved. Uninstalling the app removes its private data, but backup " +
                     "files in your Documents/Streakk folder stay on your device until you delete them yourself. " +
+                    "If you turned on \"Encrypt backups\", you will need your backup password to restore them after " +
+                    "reinstalling the app. " +
                     "You can turn off automatic backups at any time in Settings → Backup & restore."
         )
 
