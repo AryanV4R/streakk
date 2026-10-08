@@ -10,3 +10,8 @@
 #-keepclassmembers class fqcn.of.javascript.interface.for.webview {
 #   public *;
 #}
+
+# Glance widget tap callbacks are created by class name via reflection
+-keep class * implements androidx.glance.appwidget.action.ActionCallback {
+    <init>();
+}
