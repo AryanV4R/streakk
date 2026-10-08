@@ -55,8 +55,9 @@ Streakk helps you build consistency around daily habits and stay on top of your 
 
 ### Backup & Restore
 - Automatic local backup: when you leave the app, your habits, tasks, and settings are saved to `Documents/Streakk/` (last 3 copies kept, can be turned off)
+- Optional **Encrypt backups** (off by default): protect the automatic backup files with a password using AES-256-GCM; restoring after a reinstall asks for that password, and a forgotten password cannot be recovered
 - Offers to restore from that backup after a reinstall
-- Manual **Export data** and **Import data** to a file of your choice
+- Manual **Export data** and **Import data** to a file of your choice (exported files are not encrypted)
 - **Delete all data** also clears the backup copies
 
 ### Settings
@@ -130,14 +131,13 @@ The debug APK will be generated under `app/build/outputs/apk/debug/`.
 
 ## Privacy
 
-Streakk requests **zero runtime permissions related to networking** and has no internet permission declared in its manifest. Every habit, task, and setting lives only in local `SharedPreferences` on your device. If automatic backup is on, Streakk also saves up to three recent copies of your data as JSON files in `Documents/Streakk/` on the same device. This uses the file access permission, is never sent anywhere, and stays after uninstall until you delete it ("Delete all data" removes it). There is nothing to sync, nothing to leak, and nothing to sell.
+Streakk requests **zero runtime permissions related to networking** and has no internet permission declared in its manifest. Every habit, task, and setting lives only in local `SharedPreferences` on your device. If automatic backup is on, Streakk also saves up to three recent copies of your data as JSON files in `Documents/Streakk/` on the same device. This uses the file access permission, is never sent anywhere, and stays after uninstall until you delete it ("Delete all data" removes it). You can optionally turn on **Encrypt backups** to protect these files with a password; the password is never sent anywhere either, and without it the backups cannot be read. There is nothing to sync, nothing to leak, and nothing to sell.
 
 ---
 
 ## Roadmap
 
 - [ ] Theming (light mode / custom accent colors)
-- [ ] Widget support
 - [ ] Weekly/monthly progress view
 
 ---
