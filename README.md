@@ -137,7 +137,6 @@ Streakk requests **zero runtime permissions related to networking** and has no i
 ## Roadmap
 
 - [ ] Theming (light mode / custom accent colors)
-- [ ] Widget support
 - [ ] Weekly/monthly progress view
 
 ---
