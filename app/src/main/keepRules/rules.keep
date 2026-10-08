@@ -15,3 +15,19 @@
 -keep class * implements androidx.glance.appwidget.action.ActionCallback {
     <init>();
 }
+
+# WorkManager (Glance ke through aata hai) ka Room database reflection se banta hai
+-keep class * extends androidx.room.RoomDatabase {
+    <init>();
+}
+
+# WorkManager InputMerger (OverwritingInputMerger) reflection se banta hai
+-keep class * extends androidx.work.InputMerger {
+    <init>();
+}
+
+-keepclassmembers class * extends androidx.datastore.preferences.protobuf.GeneratedMessageLite {
+    <fields>;
+}
+
+-keepattributes SourceFile,LineNumberTable
