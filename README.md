@@ -33,16 +33,33 @@ Streakk helps you build consistency around daily habits and stay on top of your 
 - Streak counter that reflects real completion history
 
 ### To-Do Tasks
-- Add one-off tasks to any day from the Tasks tab
+- Add one-off tasks to any day from the Calendar tab
 - Mark a task done with a check animation, or undo it back
 - Edit, delete, or shift a task to the next day from its long-press menu
 - Optional reminder time for each task
 - Past days show a completion ring so you can see how much you finished
 
+### Inbox
+- A separate tab for quick to-dos that don't belong to a specific day
+- Add a task with the + button; completed tasks move to the bottom of the list
+- Tick a task done with a confetti burst and a completion sound (the sound can be turned off in Settings)
+- Edit or delete a task from its long-press menu
+- Just a simple list: no dates or reminders
+
 ### Calendar & Navigation
 - Horizontal week-strip calendar (swipe between weeks, jump back to Today)
 - Today / Tomorrow / Yesterday get contextual labels; every other day shows its date and weekday
 - Filter habits by **All / Morning / Afternoon**
+
+### Tabs
+- Four tabs (Calendar, Inbox, Habits, PDFs), but only three show in the bottom bar
+- Hold any tab icon to swap it with the hidden one, or pick it from Settings → General settings → Hidden tab
+
+### Home Screen Widget
+- Shows today's tasks with progress (e.g. `Today 1/3`) or your Inbox (e.g. `Inbox 0/3`)
+- Tick tasks, add a new one, and refresh right from the widget
+- Choose what it shows (Auto, Calendar or Inbox) in Settings → General settings → Widget shows
+- Adjustable widget opacity when you add it
 
 ### Reminders
 - Local notifications scheduled with `AlarmManager` — no server, no push service
@@ -54,7 +71,7 @@ Streakk helps you build consistency around daily habits and stay on top of your 
 - Sort by newest or oldest first
 
 ### Backup & Restore
-- Automatic local backup: when you leave the app, your habits, tasks, and settings are saved to `Documents/Streakk/` (last 3 copies kept, can be turned off)
+- Automatic local backup: when you leave the app, your habits, tasks, inbox items, and settings are saved to `Documents/Streakk/` (last 3 copies kept, can be turned off)
 - Optional **Encrypt backups** (off by default): protect the automatic backup files with a password using AES-256-GCM; restoring after a reinstall asks for that password, and a forgotten password cannot be recovered
 - Offers to restore from that backup after a reinstall
 - Manual **Export data** and **Import data** to a file of your choice (exported files are not encrypted)
@@ -78,6 +95,7 @@ Streakk helps you build consistency around daily habits and stay on top of your 
 | UI | Jetpack Compose, Material 3 |
 | Local storage | SharedPreferences (JSON-serialized) |
 | Scheduling | `AlarmManager` (exact, wake-from-idle) |
+| Home screen widget | Jetpack Glance |
 | Splash screen | AndroidX `core-splashscreen` |
 | Min SDK | 31 |
 | Target SDK | 37 |
@@ -92,7 +110,15 @@ No networking libraries, no analytics SDKs, no ad libraries — by design.
 app/
  └─ src/main/
      ├─ java/com/streakk/app/
-     │   └─ MainActivity.kt        # All screens, state, and scheduling logic
+     │   ├─ MainActivity.kt        # Entry point, Calendar, Habits, PDFs and Settings screens
+     │   ├─ AppRoot.kt             # Shared app state, tab navigation, backup restore
+     │   ├─ InboxScreen.kt         # Inbox tab and tab-swap sheets
+     │   ├─ HomeTodoScreen.kt      # Quick-add sheet for tasks
+     │   ├─ SettingsScreens.kt     # Privacy policy screen
+     │   ├─ SettingsStorage.kt     # Local preferences
+     │   ├─ OnboardingScreen.kt    # First-run onboarding
+     │   ├─ ReminderSchedulers.kt  # Task reminder scheduling
+     │   └─ TodoWidget.kt          # Home screen widget (Glance)
      ├─ res/
      │   ├─ drawable/              # Adaptive icon layers (foreground/background)
      │   ├─ mipmap-anydpi-v26/     # Adaptive icon definitions
@@ -131,7 +157,7 @@ The debug APK will be generated under `app/build/outputs/apk/debug/`.
 
 ## Privacy
 
-Streakk requests **zero runtime permissions related to networking** and has no internet permission declared in its manifest. Every habit, task, and setting lives only in local `SharedPreferences` on your device. If automatic backup is on, Streakk also saves up to three recent copies of your data as JSON files in `Documents/Streakk/` on the same device. This uses the file access permission, is never sent anywhere, and stays after uninstall until you delete it ("Delete all data" removes it). You can optionally turn on **Encrypt backups** to protect these files with a password; the password is never sent anywhere either, and without it the backups cannot be read. There is nothing to sync, nothing to leak, and nothing to sell.
+Streakk requests **zero runtime permissions related to networking** and has no internet permission declared in its manifest. Every habit, task, inbox item, and setting lives only in local `SharedPreferences` on your device. If automatic backup is on, Streakk also saves up to three recent copies of your data as JSON files in `Documents/Streakk/` on the same device. This uses the file access permission, is never sent anywhere, and stays after uninstall until you delete it ("Delete all data" removes it). You can optionally turn on **Encrypt backups** to protect these files with a password; the password is never sent anywhere either, and without it the backups cannot be read. There is nothing to sync, nothing to leak, and nothing to sell.
 
 ---
 
