@@ -11,9 +11,9 @@ import androidx.compose.runtime.mutableLongStateOf
 import kotlin.time.Duration.Companion.milliseconds
 import android.os.Build
 import android.provider.Settings
+import android.widget.Toast
 import androidx.activity.compose.BackHandler
 import androidx.compose.animation.AnimatedContent
-import androidx.compose.animation.Crossfade
 import androidx.compose.animation.core.FastOutSlowInEasing
 import androidx.compose.animation.core.Spring
 import androidx.compose.animation.core.spring
@@ -174,44 +174,25 @@ fun AppRoot() {
         )
     }
 
-    LaunchErrorState.message?.let { fullMessage ->
-        AlertDialog(
-            onDismissRequest = { LaunchErrorState.message = null },
-            title = { Text("Launch error (debug)") },
-            text = {
-                Column(modifier = Modifier.verticalScroll(rememberScrollState())) {
-                    SelectionContainer {
-                        Text(fullMessage, fontSize = 13.sp)
-                    }
-                }
-            },
-            confirmButton = {
-                TextButton(onClick = { LaunchErrorState.message = null }) { Text("OK") }
-            }
-        )
-    }
-
-    LaunchErrorState.message?.let { fullMessage ->
-        AlertDialog(
-            onDismissRequest = { LaunchErrorState.message = null },
-            title = { Text("Launch error (debug)") },
-            text = {
-                Column(modifier = Modifier.verticalScroll(rememberScrollState())) {
-                    SelectionContainer {
-                        Text(fullMessage, fontSize = 13.sp)
-                    }
-                }
-            },
-            confirmButton = {
-                TextButton(onClick = { LaunchErrorState.message = null }) { Text("OK") }
-            }
-        )
-    }
-
-    var currentScreen by remember { mutableStateOf(Screen.HOME) }
+    var useInbox by remember { mutableStateOf(SettingsStorage.loadUseInbox(context)) }
+    var hiddenTab by remember { mutableStateOf(SettingsStorage.loadHiddenTab(context)) }
+    var tabOrder by remember { mutableStateOf(SettingsStorage.loadTabOrder(context, hiddenTab)) }
+    var widgetSource by remember { mutableStateOf(SettingsStorage.loadWidgetSource(context)) }
+    var currentScreen by remember { mutableStateOf(todoHomeTab(hiddenTab, useInbox)) }
+    val homeTab = todoHomeTab(hiddenTab, useInbox)
     var showAddHabit by remember { mutableStateOf(false) }
     BackHandler(enabled = !showAddHabit && (currentScreen == Screen.TASKS || currentScreen == Screen.SETTINGS)) {
-        currentScreen = Screen.HOME
+        currentScreen = homeTab
+    }
+
+    fun changeHiddenTab(newHidden: Screen) {
+        val oldHidden = hiddenTab
+        if (newHidden == oldHidden) return
+        tabOrder = replaceTabInOrder(tabOrder, newHidden, oldHidden)
+        hiddenTab = newHidden
+        if (newHidden == Screen.HOME) useInbox = true
+        if (newHidden == Screen.INBOX) useInbox = false
+        if (currentScreen == newHidden) currentScreen = oldHidden
     }
     var editingHabit by remember { mutableStateOf<Habit?>(null) }
     var newHabitStartDate by remember { mutableStateOf(LocalDate.now()) }
@@ -243,6 +224,9 @@ fun AppRoot() {
                 )).filter { !it.date.isBefore(LocalDate.now().minusDays(10)) } 
             ) 
         } 
+    }
+        val inbox = remember {
+        mutableStateListOf<InboxItem>().apply { addAll(InboxStorage.load(context)) }
     }
     var firstDayOfWeek by remember { mutableStateOf(SettingsStorage.loadFirstDayOfWeek(context)) }
     var showStreakCount by remember { mutableStateOf(SettingsStorage.loadShowStreakCount(context)) }
@@ -347,6 +331,42 @@ fun AppRoot() {
     LaunchedEffect(autoBackupEnabled) {
         SettingsStorage.saveAutoBackupEnabled(context, autoBackupEnabled)
     }
+
+    LaunchedEffect(useInbox) {
+        withContext(Dispatchers.IO) {
+            SettingsStorage.saveUseInbox(context, useInbox)
+            TodoWidgetUpdater.refresh(context)
+        }
+    }
+    
+    LaunchedEffect(hiddenTab) {
+        SettingsStorage.saveHiddenTab(context, hiddenTab)
+    }
+    LaunchedEffect(tabOrder) {
+        SettingsStorage.saveTabOrder(context, tabOrder)
+    }
+        LaunchedEffect(widgetSource) {
+        SettingsStorage.saveWidgetSource(context, widgetSource)
+        TodoWidgetUpdater.refresh(context)
+    }
+    LaunchedEffect(currentScreen) {
+        if (currentScreen == Screen.INBOX) useInbox = true
+        else if (currentScreen == Screen.HOME) useInbox = false
+    }
+    var tabHintShownThisSession by remember { mutableStateOf(false) }
+    LaunchedEffect(currentScreen, showOnboarding) {
+        if (showOnboarding || tabHintShownThisSession) return@LaunchedEffect
+        if (currentScreen == Screen.SETTINGS) return@LaunchedEffect
+        if (!TabSwapHint.shouldShowToast(context)) return@LaunchedEffect
+        delay(1500.milliseconds)
+        tabHintShownThisSession = true
+        TabSwapHint.markToastShown(context)
+        Toast.makeText(
+            context,
+            "Tip: hold a tab icon to swap it with another tab",
+            Toast.LENGTH_LONG
+        ).show()
+    }
     val pendingImport = BackupBridge.pending
     LaunchedEffect(pendingImport) {
         val data = pendingImport?.let { imported ->
@@ -360,6 +380,8 @@ fun AppRoot() {
         habitStatus.putAll(data.habitStatus)
         todos.clear()
         todos.addAll(data.todos)
+        inbox.clear()
+        inbox.addAll(data.inbox)
 
         firstDayOfWeek = data.firstDayOfWeek
         showStreakCount = data.showStreakCount
@@ -367,6 +389,14 @@ fun AppRoot() {
         defaultSortOption = data.defaultSortOption
         autoScanEnabled = data.autoScanEnabled
         fileSizeUnit = data.fileSizeUnit
+        data.useInbox?.let { restored ->
+            useInbox = restored
+            if (restored && hiddenTab == Screen.INBOX) changeHiddenTab(Screen.HOME)
+            if (!restored && hiddenTab == Screen.HOME) changeHiddenTab(Screen.INBOX)
+            if (currentScreen == Screen.HOME || currentScreen == Screen.INBOX) {
+                currentScreen = todoHomeTab(hiddenTab, restored)
+            }
+        }
 
         PdfsScreenState.folders.value = data.pdfFolders
         PdfsScreenState.folderAssignments.value = data.pdfFolderAssignments
@@ -375,6 +405,7 @@ fun AppRoot() {
             HabitStorage.save(context, data.habits)
             HabitStorage.saveStatus(context, data.habitStatus)
             persistTodos(data.todos)
+            InboxStorage.save(context, data.inbox)
             PdfFolderStorage.save(context, data.pdfFolders)
             PdfFolderAssignmentStorage.save(context, data.pdfFolderAssignments)
         }
@@ -390,7 +421,7 @@ fun AppRoot() {
         if (showOnboarding) return@LaunchedEffect
         val restorePrefs = context.getSharedPreferences("habit_prefs", Context.MODE_PRIVATE)
         if (restorePrefs.getBoolean("restore_offer_done", false)) return@LaunchedEffect
-        if (habits.isNotEmpty() || todos.isNotEmpty()) {
+        if (habits.isNotEmpty() || todos.isNotEmpty() || inbox.isNotEmpty()) {
             restorePrefs.edit { putBoolean("restore_offer_done", true) }
             return@LaunchedEffect
         }
@@ -398,7 +429,7 @@ fun AppRoot() {
         val found = withContext(Dispatchers.IO) { BackupManager.findLatestAutoBackup() }
         restoreOffer = found
             ?.let { it.copy(todos = it.todos.filter { t -> !t.date.isBefore(LocalDate.now().minusDays(10)) }) }
-            ?.takeIf { it.habits.isNotEmpty() || it.todos.isNotEmpty() }
+            ?.takeIf { it.habits.isNotEmpty() || it.todos.isNotEmpty() || it.inbox.isNotEmpty() }
             if (restoreOffer == null) {
             encryptedRestorePending = withContext(Dispatchers.IO) { BackupManager.hasEncryptedAutoBackup() }
         }
@@ -438,6 +469,13 @@ fun AppRoot() {
                         if (fresh != todos.toList()) {
                             todos.clear()
                             todos.addAll(fresh)
+                        }
+                    }
+                    coroutineScope.launch {
+                        val freshInbox = withContext(Dispatchers.IO) { InboxStorage.load(context) }
+                        if (freshInbox != inbox.toList()) {
+                            inbox.clear()
+                            inbox.addAll(freshInbox)
                         }
                     }
                 }
@@ -530,7 +568,15 @@ fun AppRoot() {
                     } else {
                         Scaffold(
                             containerColor = DarkBg,
-                            bottomBar = { BottomNavBar(currentScreen) { currentScreen = it } }
+                            bottomBar = {
+                                BottomNavBar(
+                                    current = currentScreen,
+                                    hiddenTab = hiddenTab,
+                                    tabOrder = tabOrder,
+                                    onSwapTab = { pressed -> changeHiddenTab(pressed) },
+                                    onSelect = { currentScreen = it }
+                                )
+                            }
                         ) { padding ->
                             Box(
                                 modifier = Modifier
@@ -542,11 +588,7 @@ fun AppRoot() {
                                     )
                             ) {
                                 val saveableStateHolder = rememberSaveableStateHolder()
-                                Crossfade(
-                                    targetState = currentScreen,
-                                    animationSpec = tween(220),
-                                    label = "tabSwitchTransition"
-                                ) { screen ->
+                                currentScreen.let { screen ->
                                     saveableStateHolder.SaveableStateProvider(screen.name) {
                                         when (screen) {
                                             Screen.HOME -> HomeTodoScreen(
@@ -559,7 +601,14 @@ fun AppRoot() {
                                                     currentScreen = Screen.SETTINGS
                                                 }
                                             )
-
+                                            Screen.INBOX -> InboxScreen(
+                                                items = inbox,
+                                                bottomContentPadding = padding.calculateBottomPadding(),
+                                                soundOnComplete = soundOnComplete,
+                                                onSettingsClick = {
+                                                    currentScreen = Screen.SETTINGS
+                                                }
+                                            )
                                             Screen.TASKS -> TasksScreen(
                                                 habits = habits,
                                                 habitStatus = habitStatus,
@@ -603,6 +652,8 @@ fun AppRoot() {
                                                     habits.clear()
                                                     habitStatus.clear()
                                                     todos.clear()
+                                                    inbox.clear()
+                                                    InboxStorage.save(context, emptyList())
                                                     showDeleteAllBanner = true
                                                     coroutineScope.launch(Dispatchers.IO) {
                                                         BackupManager.deleteAllBackups(context)
@@ -633,7 +684,14 @@ fun AppRoot() {
                                                 autoLockTimeout = autoLockTimeout,
                                                 onAutoLockTimeoutChange = { autoLockTimeout = it },
                                                 autoBackupEnabled = autoBackupEnabled,
-                                                onAutoBackupEnabledChange = { autoBackupEnabled = it }
+                                                onAutoBackupEnabledChange = { autoBackupEnabled = it },
+                                                hiddenTab = hiddenTab,
+                                                onHiddenTabChange = {
+                                                    TabSwapHint.dismiss(context)
+                                                    changeHiddenTab(it)
+                                                },
+                                                widgetSource = widgetSource,
+                                                onWidgetSourceChange = { widgetSource = it }
                                             )
                                         }
                                     }
@@ -683,7 +741,7 @@ fun AppRoot() {
                 text = {
                     Text(
                         "We found a backup on this phone with ${offer.habits.size} habits and " +
-                            "${offer.todos.size} tasks. Restore it?"
+                            "${offer.todos.size + offer.inbox.size} tasks. Restore it?"
                     )
                 },
                 confirmButton = {

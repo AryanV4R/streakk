@@ -71,7 +71,7 @@ fun PrivacyPolicyScreen(onBack: () -> Unit, bottomContentPadding: Dp = 0.dp) {
         Spacer(Modifier.height(24.dp))
 
         sectionBody(
-            "Streakk (\"we\", \"our\", \"the app\") is a habit tracking, to-do list, and PDF reading app. " +
+            "Streakk (\"we\", \"our\", \"the app\") is a habit tracking, to-do list, inbox, and PDF reading app. " +
                     "This Privacy Policy explains what information the app handles and how, in plain language."
         )
 
@@ -84,11 +84,11 @@ fun PrivacyPolicyScreen(onBack: () -> Unit, bottomContentPadding: Dp = 0.dp) {
 
         sectionTitle("2. Local Storage")
         sectionBody(
-            "Your habits, streaks, to-do tasks, and app preferences are saved locally on your device using " +
+            "Your habits, streaks, to-do tasks, inbox items, and app preferences are saved locally on your device using " +
                     "Android's standard app storage. This data is only readable by Streakk and is removed " +
                     "automatically if you uninstall the app, or manually at any time using \"Delete all data\" " +
                     "in Settings. Streakk also automatically saves up to three recent backup copies of your " +
-                    "habits, tasks and settings as files in the Documents/Streakk folder on your device, so you " +
+                    "habits, tasks, inbox items and settings as files in the Documents/Streakk folder on your device, so you " +
                     "can restore them after reinstalling the app. These files are not sent anywhere by Streakk " +
                     "and are not removed when you uninstall the app; like any file in your Documents folder, " +
                     "they may be visible to other apps you have given file access to. You can turn this off in " +

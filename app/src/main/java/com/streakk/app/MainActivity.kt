@@ -51,6 +51,7 @@ import androidx.compose.material.icons.filled.LightMode
 import androidx.compose.material.icons.filled.NightsStay
 import androidx.compose.material.icons.filled.Repeat
 import androidx.compose.material.icons.filled.LocalFireDepartment
+import androidx.compose.material.icons.filled.Inbox
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
@@ -121,6 +122,8 @@ import java.text.SimpleDateFormat
 import java.util.Date
 import android.content.Context
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.platform.LocalHapticFeedback
+import androidx.compose.ui.hapticfeedback.HapticFeedbackType
 import org.json.JSONArray
 import org.json.JSONObject
 import androidx.compose.runtime.snapshots.SnapshotStateMap
@@ -241,7 +244,7 @@ val Baloo2Typography = Typography(
     labelSmall = defaultTypography.labelSmall.copy(fontFamily = Poppins)
 )
 
-enum class Screen { HOME, TASKS, PDFS, SETTINGS }
+enum class Screen { HOME, TASKS, PDFS, SETTINGS, INBOX }
 
 enum class HabitStatus { ACTIVE, DONE, SKIPPED }
 
@@ -899,51 +902,75 @@ fun TopBanner(
 }
 
 @Composable
-fun BottomNavBar(current: Screen, onSelect: (Screen) -> Unit) {
+fun BottomNavBar(
+    current: Screen,
+    hiddenTab: Screen,
+    tabOrder: List<Screen>,
+    onSwapTab: (Screen) -> Unit,
+    onSelect: (Screen) -> Unit
+) {
     val navBarContentHeight = 56.dp
     val bottomInset = WindowInsets.navigationBars.asPaddingValues().calculateBottomPadding()
+    var swapTarget by remember { mutableStateOf<Screen?>(null) }
+        val context = LocalContext.current
+        val haptic = LocalHapticFeedback.current
     NavigationBar(
         containerColor = Color(0xFF1C1D24),
         modifier = Modifier.height(navBarContentHeight + bottomInset)
     ) {
-        NavigationBarItem(
-            selected = current == Screen.HOME,
-            onClick = { onSelect(Screen.HOME) },
-            icon = { NavIconWithTooltip("Tasks") { Icon(Icons.Filled.CheckCircle, contentDescription = "Tasks", modifier = Modifier.size(22.dp)) } },
-            label = null,
-            colors = NavigationBarItemDefaults.colors(
-                selectedIconColor = Color.White,
-                selectedTextColor = Color.White,
-                indicatorColor = BlueAccent,
-                unselectedIconColor = TextGray,
-                unselectedTextColor = TextGray
-            )
-        )
-        NavigationBarItem(
-            selected = current == Screen.TASKS,
-            onClick = { onSelect(Screen.TASKS) },
-            icon = { NavIconWithTooltip("Habits") { Icon(Icons.Default.Repeat, contentDescription = "Habits", modifier = Modifier.size(24.dp)) } },
-            label = null,
-            colors = NavigationBarItemDefaults.colors(
-                selectedIconColor = Color.White,
-                selectedTextColor = Color.White,
-                indicatorColor = BlueAccent,
-                unselectedIconColor = TextGray,
-                unselectedTextColor = TextGray
-            )
-        )
-        NavigationBarItem(
-            selected = current == Screen.PDFS,
-            onClick = { onSelect(Screen.PDFS) },
-            icon = { NavIconWithTooltip("PDFs") { Icon(Icons.Filled.Description, contentDescription = "PDFs", modifier = Modifier.size(22.dp)) } },
-            label = null,
-            colors = NavigationBarItemDefaults.colors(
-                selectedIconColor = Color.White,
-                selectedTextColor = Color.White,
-                indicatorColor = BlueAccent,
-                unselectedIconColor = TextGray,
-                unselectedTextColor = TextGray
-            )
+        tabOrder.forEachIndexed { index, tab ->
+                NavigationBarItem(
+                    selected = current == tab,
+                    onClick = { haptic.performHapticFeedback(HapticFeedbackType.LongPress); onSelect(tab) },
+                    icon = {
+                        Box(
+                            modifier = Modifier
+                                .size(width = 56.dp, height = 32.dp)
+                                .combinedClickable(
+                                    interactionSource = remember { MutableInteractionSource() },
+                                    indication = null,
+                                    onLongClick = {
+                                        TabSwapHint.dismiss(context)
+                                        val firstSlotLocked = index == 0 &&
+                                            hiddenTab != Screen.HOME && hiddenTab != Screen.INBOX
+                                        if (firstSlotLocked) {
+                                            Toast.makeText(
+                                                context,
+                                                "First tab can only be Calendar or Inbox",
+                                                Toast.LENGTH_SHORT
+                                            ).show()
+                                        } else {
+                                            swapTarget = tab
+                                        }
+                                    },
+                                    onClick = { haptic.performHapticFeedback(HapticFeedbackType.LongPress); onSelect(tab) }
+                                ),
+                            contentAlignment = Alignment.Center
+                        ) {
+                            Icon(
+                                tabIcon(tab),
+                                contentDescription = tabLabel(tab),
+                                modifier = Modifier.size(if (tab == Screen.TASKS) 24.dp else 22.dp)
+                            )
+                        }
+                    },
+                    label = null,
+                    colors = NavigationBarItemDefaults.colors(
+                        selectedIconColor = Color.White,
+                        selectedTextColor = Color.White,
+                        indicatorColor = BlueAccent,
+                        unselectedIconColor = TextGray,
+                        unselectedTextColor = TextGray
+                    )
+                )
+            }
+    }
+    swapTarget?.let { pressed ->
+        TabSwapSheet(
+            pressedTab = pressed,
+            hiddenTab = hiddenTab,
+            onSwap = { onSwapTab(pressed) },
+            onDismiss = { swapTarget = null }
         )
     }
 }
@@ -970,6 +997,7 @@ fun HomeTodoScreen(bottomContentPadding: Dp = 0.dp, firstDayOfWeek: DayOfWeek = 
     var editingTodo by remember { mutableStateOf<HomeTodoItem?>(null) }
     var menuOpenForTodoId by remember { mutableStateOf<Long?>(null) }
     val context = LocalContext.current
+    val haptic = LocalHapticFeedback.current
     var lastTapHintAt by remember { mutableStateOf(0L) }
     val pendingDoneIds = remember { mutableStateListOf<Long>() }
     val leavingIds = remember { mutableStateListOf<Long>() }
@@ -1286,6 +1314,7 @@ fun HomeTodoScreen(bottomContentPadding: Dp = 0.dp, firstDayOfWeek: DayOfWeek = 
                                 fontSize = 15.sp,
                                 textAlign = TextAlign.Center
                             )
+                            TabSwapHintLine()
                         }
                     }
                 }
@@ -1363,6 +1392,7 @@ fun HomeTodoScreen(bottomContentPadding: Dp = 0.dp, firstDayOfWeek: DayOfWeek = 
                                         interactionSource = remember { MutableInteractionSource() },
                                         indication = null
                                     ) {
+                                        haptic.performHapticFeedback(HapticFeedbackType.LongPress)
                                         if (todo.completed) {
                                             undoTodoWithAnimation(todo.id)
                                         } else {
@@ -1430,7 +1460,7 @@ fun HomeTodoScreen(bottomContentPadding: Dp = 0.dp, firstDayOfWeek: DayOfWeek = 
                     .size(56.dp)
                     .clip(CircleShape)
                     .background(BlueAccent)
-                    .clickable { showAddSheet = true },
+                    .clickable { haptic.performHapticFeedback(HapticFeedbackType.LongPress); showAddSheet = true },
                 contentAlignment = Alignment.Center
             ) {
                 Icon(Icons.Default.Add, contentDescription = "Add to-do", tint = Color.White, modifier = Modifier.size(28.dp))
@@ -1547,7 +1577,8 @@ fun TodoOptionsSheet(
     onDelete: () -> Unit,
     onShift: () -> Unit,
     onDone: () -> Unit,
-    onUndo: () -> Unit
+    onUndo: () -> Unit,
+    showShift: Boolean = true
 ) {
     val todoSheetNestedScrollConnection = remember {
         object : NestedScrollConnection {
@@ -1613,7 +1644,7 @@ fun TodoOptionsSheet(
                         horizontalArrangement = Arrangement.SpaceEvenly
                     ) {
                         PdfSheetQuickAction(Icons.Default.Delete, "Delete", tint = Color(0xFFE55353)) { onDismiss(); onDelete() }
-                        PdfSheetQuickAction(Icons.AutoMirrored.Filled.DriveFileMove, "Shift", enabled = !todo.completed) { onDismiss(); onShift() }
+                        if (showShift) PdfSheetQuickAction(Icons.AutoMirrored.Filled.DriveFileMove, "Shift", enabled = !todo.completed) { onDismiss(); onShift() }
                         if (todo.completed) {
                             PdfSheetQuickAction(Icons.AutoMirrored.Filled.Undo, "Undo", tint = Color(0xFFFFC542)) { onDismiss(); onUndo() }
                         } else {
@@ -1781,7 +1812,11 @@ fun SettingsScreen(
     autoLockTimeout: AutoLockTimeout = AutoLockTimeout.INSTANT,
     onAutoLockTimeoutChange: (AutoLockTimeout) -> Unit = {},
     autoBackupEnabled: Boolean = true,
-    onAutoBackupEnabledChange: (Boolean) -> Unit = {}
+    onAutoBackupEnabledChange: (Boolean) -> Unit = {},
+    hiddenTab: Screen = Screen.INBOX,
+    onHiddenTabChange: (Screen) -> Unit = {},
+    widgetSource: WidgetSource = WidgetSource.AUTO,
+    onWidgetSourceChange: (WidgetSource) -> Unit = {}
 ) {
     var showGeneralSettings by remember { mutableStateOf(false) }
     val context = LocalContext.current
@@ -1824,7 +1859,11 @@ fun SettingsScreen(
             appLockEnabled = appLockEnabled,
             onAppLockEnabledChange = onAppLockEnabledChange,
             autoLockTimeout = autoLockTimeout,
-            onAutoLockTimeoutChange = onAutoLockTimeoutChange
+            onAutoLockTimeoutChange = onAutoLockTimeoutChange,
+            hiddenTab = hiddenTab,
+            onHiddenTabChange = onHiddenTabChange,
+            widgetSource = widgetSource,
+            onWidgetSourceChange = onWidgetSourceChange
         )
     } else {
         AnimatedContent(
@@ -2279,29 +2318,25 @@ fun autostartSettingsIntent(context: Context): Intent {
 fun FirstDayOfWeekDialog(current: DayOfWeek, onDismiss: () -> Unit, onSelect: (DayOfWeek) -> Unit) {
     val configuration = LocalConfiguration.current
     val currentLocale = remember(configuration) { configuration.locales[0] }
-    Dialog(onDismissRequest = onDismiss) {
-        Surface(shape = RoundedCornerShape(16.dp), color = CardBg) {
-            Column(modifier = Modifier.padding(20.dp)) {
-                Text("First day of week", color = Color.White, fontSize = 18.sp, fontWeight = FontWeight.Bold)
-                Spacer(Modifier.height(12.dp))
-                listOf(DayOfWeek.MONDAY, DayOfWeek.SUNDAY).forEach { day ->
-                    Row(
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .clickable { onSelect(day) }
-                            .padding(vertical = 12.dp),
-                        verticalAlignment = Alignment.CenterVertically,
-                        horizontalArrangement = Arrangement.SpaceBetween
-                    ) {
-                        Text(
-                            day.getDisplayName(TextStyle.FULL, currentLocale),
-                            color = Color.White,
-                            fontSize = 16.sp
-                        )
-                        if (day == current) {
-                            Icon(Icons.Default.Check, contentDescription = null, tint = BlueAccent)
-                        }
-                    }
+    TabSheetShell(onDismiss) {
+        Text("First day of week", color = Color.White, fontSize = 18.sp, fontWeight = FontWeight.Bold)
+        Spacer(Modifier.height(12.dp))
+        listOf(DayOfWeek.MONDAY, DayOfWeek.SUNDAY).forEach { day ->
+            Row(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .clickable { onSelect(day) }
+                    .padding(vertical = 12.dp),
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.SpaceBetween
+            ) {
+                Text(
+                    day.getDisplayName(TextStyle.FULL, currentLocale),
+                    color = Color.White,
+                    fontSize = 16.sp
+                )
+                if (day == current) {
+                    Icon(Icons.Default.Check, contentDescription = null, tint = BlueAccent)
                 }
             }
         }
@@ -2316,25 +2351,21 @@ fun <T> SingleChoiceDialog(
     onDismiss: () -> Unit,
     onSelect: (T) -> Unit
 ) {
-    Dialog(onDismissRequest = onDismiss) {
-        Surface(shape = RoundedCornerShape(16.dp), color = CardBg) {
-            Column(modifier = Modifier.padding(20.dp)) {
-                Text(title, color = Color.White, fontSize = 18.sp, fontWeight = FontWeight.Bold)
-                Spacer(Modifier.height(12.dp))
-                options.forEach { option ->
-                    Row(
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .clickable { onSelect(option) }
-                            .padding(vertical = 12.dp),
-                        verticalAlignment = Alignment.CenterVertically,
-                        horizontalArrangement = Arrangement.SpaceBetween
-                    ) {
-                        Text(optionLabel(option), color = Color.White, fontSize = 16.sp)
-                        if (option == current) {
-                            Icon(Icons.Default.Check, contentDescription = null, tint = BlueAccent)
-                        }
-                    }
+    TabSheetShell(onDismiss) {
+        Text(title, color = Color.White, fontSize = 18.sp, fontWeight = FontWeight.Bold)
+        Spacer(Modifier.height(12.dp))
+        options.forEach { option ->
+            Row(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .clickable { onSelect(option) }
+                    .padding(vertical = 12.dp),
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.SpaceBetween
+            ) {
+                Text(optionLabel(option), color = Color.White, fontSize = 16.sp)
+                if (option == current) {
+                    Icon(Icons.Default.Check, contentDescription = null, tint = BlueAccent)
                 }
             }
         }
@@ -2527,6 +2558,7 @@ fun TasksScreen(
         derivedStateOf { habits.associate { it.id to computeStreak(it, habitStatus, today) } }
     }
     val context = LocalContext.current
+    val haptic = LocalHapticFeedback.current
     val configuration = LocalConfiguration.current
     val currentLocale = remember(configuration) { configuration.locales[0] }
     val currentWeekMonday = remember(today, firstDayOfWeek) { weekStartFor(today, firstDayOfWeek) }
@@ -2607,7 +2639,7 @@ fun TasksScreen(
                 Text(titleText, color = Color.White, fontSize = 28.sp, fontWeight = FontWeight.ExtraBold)
                 if (!selectedDate.isBefore(today)) {
                     IconButton(
-                        onClick = { onAddHabit(selectedDate) }
+                        onClick = { haptic.performHapticFeedback(HapticFeedbackType.LongPress); onAddHabit(selectedDate) }
                     ) {
                         Icon(
                             Icons.Default.Add,
@@ -2844,6 +2876,7 @@ fun TasksScreen(
                     fontSize = 15.sp,
                     textAlign = TextAlign.Center
                 )
+                TabSwapHintLine()
             }
         } else {
             DoItAt.values().forEach { period ->
@@ -2930,7 +2963,7 @@ fun TasksScreen(
         }
     }
 }
-
+@OptIn(ExperimentalFoundationApi::class)
 @Composable
 fun HabitCard(
     habit: Habit,
@@ -2949,6 +2982,7 @@ fun HabitCard(
     onEdit: () -> Unit
 ) {
     val isChecked = status == HabitStatus.DONE || status == HabitStatus.SKIPPED
+    val haptic = LocalHapticFeedback.current
     val cardColor = if (status == HabitStatus.ACTIVE) BlueAccent else CardBg
    val textColor = if (status == HabitStatus.ACTIVE) Color.White else TextGray
 
@@ -2974,7 +3008,7 @@ fun HabitCard(
                         color = if (isChecked) Color.Transparent else TextGray,
                         shape = CircleShape
                     )
-                    .clickable { onToggleDone() },
+                    .clickable { haptic.performHapticFeedback(HapticFeedbackType.LongPress); onToggleDone() },
                 contentAlignment = Alignment.Center
             ) {
                 if (isChecked) {
@@ -2987,7 +3021,15 @@ fun HabitCard(
             Card(
                 modifier = Modifier
                     .fillMaxWidth()
-                    .height(72.dp),
+                    .height(72.dp)
+                    .clip(RoundedCornerShape(18.dp))
+                    .combinedClickable(
+                        onClick = {},
+                        onLongClick = {
+                            haptic.performHapticFeedback(HapticFeedbackType.LongPress)
+                            onOpenMenu()
+                        }
+                    ),
                 shape = RoundedCornerShape(18.dp),
                 colors = CardDefaults.cardColors(containerColor = cardColor)
             ) {
@@ -2998,12 +3040,12 @@ fun HabitCard(
                     verticalAlignment = Alignment.CenterVertically,
                     horizontalArrangement = Arrangement.SpaceBetween
                 ) {
-                    Row(verticalAlignment = Alignment.CenterVertically) {
+                    Row(modifier = Modifier.weight(1f), verticalAlignment = Alignment.CenterVertically) {
                         Icon(iconForKey(habit.iconEmoji), contentDescription = null, tint = textColor, modifier = Modifier.size(22.dp))
                         Spacer(Modifier.width(12.dp))
-                        Column {
+                        Column(modifier = Modifier.weight(1f)) {
                             Row(verticalAlignment = Alignment.CenterVertically) {
-                                Text(habit.name, color = textColor, fontWeight = FontWeight.Bold, fontSize = 18.sp)
+                                Text(habit.name, color = textColor, fontWeight = FontWeight.Bold, fontSize = 18.sp, maxLines = 2, overflow = TextOverflow.Ellipsis, modifier = Modifier.weight(1f, fill = false))
                                 if (showStreak && streakCount > 0) {
                                     Spacer(Modifier.width(6.dp))
                                     Row(
@@ -3061,12 +3103,7 @@ fun HabitCard(
                             }
                         }
                     }
-                    Text(
-                        "•••",
-                        color = textColor,
-                        fontSize = 18.sp,
-                        modifier = Modifier.clickable { onOpenMenu() }
-                    )
+
                     if (menuExpanded) {
                         HabitOptionsSheet(
                             habit = habit,
@@ -4156,6 +4193,7 @@ fun PdfsScreen(
                             fontSize = 14.sp,
                             textAlign = TextAlign.Center
                         )
+                        TabSwapHintLine()
                     }
                 }
             }
@@ -4698,7 +4736,8 @@ fun AddHabitScreen(existingHabit: Habit?, onBack: () -> Unit, onSave: (Habit) ->
     var endMode by remember { mutableStateOf(existingHabit?.endMode ?: EndMode.OFF) }
     var endDate by remember { mutableStateOf(existingHabit?.endDate) }
     var endAfterDays by remember { mutableStateOf(existingHabit?.endAfterDays ?: 30) }
-
+    var saved by remember { mutableStateOf(false) }
+    val haptic = LocalHapticFeedback.current
     var showDatePicker by remember { mutableStateOf(false) }
     var showDaysPicker by remember { mutableStateOf(false) }
     var showAdvanced by remember { mutableStateOf(false) }
@@ -4981,7 +5020,9 @@ when (endMode) {
             Spacer(Modifier.height(36.dp))
             Button(
     onClick = {
-        if (name.isNotBlank()) {
+        if (name.isNotBlank() && !saved) {
+            saved = true
+            haptic.performHapticFeedback(HapticFeedbackType.LongPress)
             onSave(
                 Habit(
                     id = existingHabit?.id ?: System.currentTimeMillis(),

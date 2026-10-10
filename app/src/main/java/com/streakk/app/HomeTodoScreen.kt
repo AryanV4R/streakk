@@ -57,6 +57,8 @@ import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.platform.LocalSoftwareKeyboardController
 import androidx.compose.ui.platform.LocalView
+import androidx.compose.ui.platform.LocalHapticFeedback
+import androidx.compose.ui.hapticfeedback.HapticFeedbackType
 import androidx.compose.ui.text.TextRange
 import androidx.compose.ui.text.font.FontStyle
 import androidx.compose.ui.text.font.FontWeight
@@ -80,6 +82,7 @@ import java.time.format.DateTimeFormatter
 fun QuickAddTodoSheet(
     initialText: String = "",
     initialReminderTime: LocalTime? = null,
+        showReminder: Boolean = true,
     onDismiss: () -> Unit,
     onSave: (String, LocalTime?) -> Unit
 ) {
@@ -96,6 +99,7 @@ fun QuickAddTodoSheet(
     var showTimePicker by remember { mutableStateOf(false) }
     val focusRequester = remember { FocusRequester() }
     val keyboardController = LocalSoftwareKeyboardController.current
+    val haptic = LocalHapticFeedback.current
 
     var closeAction by remember { mutableStateOf<(() -> Unit)?>(null) }
     val exitProgress by animateFloatAsState(
@@ -275,6 +279,7 @@ fun QuickAddTodoSheet(
                         horizontalArrangement = Arrangement.SpaceBetween,
                         verticalAlignment = Alignment.CenterVertically
                     ) {
+                        if (showReminder) {
                         Row(
                             modifier = Modifier
                                 .clip(androidx.compose.foundation.shape.RoundedCornerShape(8.dp))
@@ -336,11 +341,15 @@ fun QuickAddTodoSheet(
                                 )
                             }
                         }
+                        } else {
+                            Spacer(Modifier)
+                        }
                         Box(
                             modifier = Modifier
                                 .clip(androidx.compose.foundation.shape.RoundedCornerShape(8.dp))
                                 .background(if (text.isNotBlank()) BlueAccent else Color(0xFF33343D))
                                 .clickable(enabled = text.isNotBlank()) {
+                                    haptic.performHapticFeedback(HapticFeedbackType.LongPress)
                                     keyboardController?.hide()
                                     if (closeAction == null) {
                                         closeAction = { onSave(text, reminderTime) }

@@ -5,6 +5,12 @@ import android.util.Base64
 import androidx.core.content.edit
 import java.time.DayOfWeek
 
+enum class WidgetSource(val label: String) {
+    AUTO("Auto"),
+    CALENDAR("Calendar"),
+    INBOX("Inbox")
+}
+
 object SettingsStorage {
     private const val PREFS_NAME = "habit_prefs"
     private const val KEY_FIRST_DAY = "first_day_of_week"
@@ -31,6 +37,70 @@ object SettingsStorage {
             .edit { putBoolean(KEY_SHOW_STREAK, value) }
     }
 
+    private const val KEY_USE_INBOX = "use_inbox"
+
+    fun loadUseInbox(context: Context): Boolean {
+        return context.getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE)
+            .getBoolean(KEY_USE_INBOX, false)
+    }
+
+    fun saveUseInbox(context: Context, value: Boolean) {
+        context.getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE)
+            .edit { putBoolean(KEY_USE_INBOX, value) }
+    }
+    
+    private const val KEY_HIDDEN_TAB = "hidden_tab"
+
+    fun loadHiddenTab(context: Context): Screen {
+        val prefs = context.getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE)
+        val name = prefs.getString(KEY_HIDDEN_TAB, null)
+        val saved = Screen.entries.firstOrNull { it.name == name }
+        if (saved != null && saved != Screen.SETTINGS) return saved
+        return if (loadUseInbox(context)) Screen.HOME else Screen.INBOX
+    }
+
+    fun saveHiddenTab(context: Context, tab: Screen) {
+        context.getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE)
+            .edit { putString(KEY_HIDDEN_TAB, tab.name) }
+    }
+        private const val KEY_TAB_ORDER = "tab_order"
+
+    fun loadTabOrder(context: Context, hiddenTab: Screen): List<Screen> {
+        val default = listOf(Screen.HOME, Screen.INBOX, Screen.TASKS, Screen.PDFS)
+            .filter { it != hiddenTab }
+        val raw = context.getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE)
+            .getString(KEY_TAB_ORDER, null) ?: return default
+        val parsed = raw.split(",").mapNotNull { n -> Screen.entries.firstOrNull { it.name == n } }
+        val valid = parsed.size == 3 &&
+            parsed.distinct().size == 3 &&
+            hiddenTab !in parsed &&
+            Screen.SETTINGS !in parsed &&
+            (parsed[0] == Screen.HOME || parsed[0] == Screen.INBOX)
+        return if (valid) parsed else default
+    }
+
+    fun saveTabOrder(context: Context, order: List<Screen>) {
+        context.getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE)
+            .edit { putString(KEY_TAB_ORDER, order.joinToString(",") { it.name }) }
+    }
+        private const val KEY_WIDGET_SOURCE = "widget_source"
+
+    fun loadWidgetSource(context: Context): WidgetSource {
+        val name = context.getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE)
+            .getString(KEY_WIDGET_SOURCE, WidgetSource.AUTO.name)
+        return try { WidgetSource.valueOf(name ?: WidgetSource.AUTO.name) } catch (_: Exception) { WidgetSource.AUTO }
+    }
+
+    fun saveWidgetSource(context: Context, source: WidgetSource) {
+        context.getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE)
+            .edit { putString(KEY_WIDGET_SOURCE, source.name) }
+    }
+
+    fun widgetUsesInbox(context: Context): Boolean = when (loadWidgetSource(context)) {
+        WidgetSource.AUTO -> loadUseInbox(context)
+        WidgetSource.CALENDAR -> false
+        WidgetSource.INBOX -> true
+    }
     private const val KEY_SOUND_ON_COMPLETE = "sound_on_complete"
 
     fun loadSoundOnComplete(context: Context): Boolean {

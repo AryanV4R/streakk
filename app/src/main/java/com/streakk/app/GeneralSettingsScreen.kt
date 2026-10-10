@@ -66,7 +66,11 @@ fun GeneralSettingsScreen(
     appLockEnabled: Boolean = false,
     onAppLockEnabledChange: (Boolean) -> Unit = {},
     autoLockTimeout: AutoLockTimeout = AutoLockTimeout.INSTANT,
-    onAutoLockTimeoutChange: (AutoLockTimeout) -> Unit = {}
+    onAutoLockTimeoutChange: (AutoLockTimeout) -> Unit = {},
+    hiddenTab: Screen = Screen.INBOX,
+    onHiddenTabChange: (Screen) -> Unit = {},
+    widgetSource: WidgetSource = WidgetSource.AUTO,
+    onWidgetSourceChange: (WidgetSource) -> Unit = {}
 ) {
     BackHandler(onBack = onBack)
     val context = LocalContext.current
@@ -80,6 +84,8 @@ fun GeneralSettingsScreen(
     var showAutoLockDialog by remember { mutableStateOf(false) }
     var showClearCacheConfirm by remember { mutableStateOf(false) }
     var showCacheClearedBanner by remember { mutableStateOf(false) }
+    var showHiddenTabSheet by remember { mutableStateOf(false) }
+    var showWidgetSourceDialog by remember { mutableStateOf(false) }
     var preferredAppLabel by remember(preferredPdfPackage) {
         mutableStateOf(
             preferredPdfPackage?.let {
@@ -165,6 +171,18 @@ fun GeneralSettingsScreen(
                 trailingText = if (showStreakCount) "On" else "Off",
                 onClick = { onShowStreakCountChange(!showStreakCount) }
             )
+            HorizontalDivider(color = Color(0xFF3A3B44))
+            SettingsRow(
+                title = "Hidden tab",
+                trailingText = tabLabel(hiddenTab),
+                onClick = { showHiddenTabSheet = true }
+            )
+            HorizontalDivider(color = Color(0xFF3A3B44))
+            SettingsRow(
+                title = "Widget shows",
+                trailingText = widgetSource.label,
+                onClick = { showWidgetSourceDialog = true }
+            )
         }
 
         if (showFirstDayDialog) {
@@ -214,6 +232,32 @@ fun GeneralSettingsScreen(
             )
         }
 
+        if (showHiddenTabSheet) {
+            HiddenTabPickerSheet(
+                hiddenTab = hiddenTab,
+                onSelect = onHiddenTabChange,
+                onDismiss = { showHiddenTabSheet = false }
+            )
+        }
+                if (showWidgetSourceDialog) {
+            SingleChoiceDialog(
+                title = "Widget shows",
+                options = WidgetSource.entries,
+                optionLabel = {
+                    when (it) {
+                        WidgetSource.AUTO -> "Auto (follow first tab)"
+                        WidgetSource.CALENDAR -> "To-Do Calendar"
+                        WidgetSource.INBOX -> "Inbox"
+                    }
+                },
+                current = widgetSource,
+                onDismiss = { showWidgetSourceDialog = false },
+                onSelect = {
+                    onWidgetSourceChange(it)
+                    showWidgetSourceDialog = false
+                }
+            )
+        }
         if (showSortDialog) {
             SingleChoiceDialog(
                 title = "Default sort order",
